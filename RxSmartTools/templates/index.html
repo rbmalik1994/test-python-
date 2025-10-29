@@ -1,33 +1,397 @@
-<!doctype html>
+<!DOCTYPE html>
+{% raw %}
+<!--
+  Template: templates/index.html
+  Purpose: Landing page for RX Smart Tools. Shows quick links to the PDF toolbox,
+  Saved Files area, and Excel comparator. This file is a Jinja template and
+  relies on `url_for` for route generation and `cleared_msg` (optional) for alerts.
+
+  Notes for maintainers:
+  - Keep Jinja constructs ({{ ... }}) and control blocks (e.g. {% ... %}) intact.
+  - This file is intentionally light on JS; styling is Tailwind-driven.
+  - Accessibility improvements added: skip link, ARIA labels, and SVG titles.
+-->
+{% endraw %}
 <html lang="en">
+
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>RX PDF Tools</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Short description for SEO / social snippets. Keep in sync with README. -->
+  <meta name="description"
+    content="RX Smart Tools — split/merge PDFs, manage saved files, and compare Excel sheets quickly." />
+  <title>RX Smart Tools</title>
+  <!-- Tailwind CDN: using a stable version to avoid breaking changes. For production,
+         consider bundling or pinning locally. rel="noopener" isn't applicable to stylesheets,
+         but we add an explicit comment so future editors consider integrity attributes. -->
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+
+  <!-- tiny additional styles for subtle animations
+         - .card-float: subtle lift on hover to indicate interactivity
+         - .glass: translucent background used on the hero to create depth
+    -->
+  <style>
+    /* subtle floating effect for card-like elements */
+    .card-float {
+      transition: transform 0.28s cubic-bezier(0.22, 0.9, 0.34, 1),
+        box-shadow 0.28s;
+    }
+
+    .card-float:hover {
+      transform: translateY(-6px) scale(1.01);
+      box-shadow: 0 18px 30px rgba(2, 6, 23, 0.12);
+    }
+
+    /* glass style: translucent with backdrop blur (works in modern browsers) */
+    .glass {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(6px);
+    }
+
+    /* file illustrations (right-side) interactive styles */
+    .file-graphic a.file-link {
+      display: inline-block;
+      text-decoration: none;
+      transition: transform 220ms cubic-bezier(0.22, 0.9, 0.34, 1),
+        filter 220ms;
+      transform-origin: center center;
+      will-change: transform;
+    }
+
+    .file-graphic a.file-link:hover,
+    .file-graphic a.file-link:focus {
+      transform: translateY(-8px) scale(1.06);
+      filter: drop-shadow(0 16px 30px rgba(2, 6, 23, 0.12));
+      z-index: 3;
+    }
+
+    /* ensure the front file sits above the behind file when hovered */
+    .file-graphic a.file-link {
+      position: relative;
+    }
+
+    .file-graphic a.file-link.pdf-file:hover {
+      z-index: 4;
+    }
+
+    .file-graphic a.file-link.excel-file:hover {
+      z-index: 4;
+    }
+
+    /* small icon style used in cards and buttons */
+    .unified-icon {
+      width: 22px;
+      height: 22px;
+      display: inline-block;
+      vertical-align: -3px;
+    }
+
+    /* colored text/icon helpers */
+    .accent-red {
+      color: #c0262e;
+    }
+
+    .accent-green {
+      color: #047857;
+    }
+
+    /* accessible focus outline for file groups */
+    a.file-link:focus {
+      outline: 3px solid rgba(59, 130, 246, 0.15);
+      outline-offset: 4px;
+    }
+
+    /* popped state: stronger pop and ensure it's visually above sibling SVGs */
+    .file-graphic a.file-link.popped {
+      transform: translateY(-12px) scale(1.08) !important;
+      filter: drop-shadow(0 22px 34px rgba(2, 6, 23, 0.14)) !important;
+    }
+  </style>
 </head>
-<body class="bg-gray-100">
-  <div class="container mx-auto p-6">
-    <h1 class="text-3xl font-bold text-center text-blue-600 mb-6">RX PDF Tools</h1>
+
+<body class="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-blue-50 text-gray-800">
+  <!-- Skip link for keyboard users to jump straight to main content -->
+  <a class="sr-only focus:not-sr-only p-4 bg-white text-blue-700 rounded-md absolute" href="#main-content">Skip to
+    content</a>
+
+  <!-- Primary navigation. Use role and aria-label for clarity to assistive tech. -->
+  <nav role="navigation" aria-label="Main navigation" class="container mx-auto p-4 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <!-- Logo: visually compact. Add a <title> inside the SVG for screen readers. -->
+      <a href="{{ url_for('main.index') }}" class="flex items-center space-x-3" aria-label="RX Smart Tools home">
+        <div class="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            role="img" aria-hidden="false">
+            <title>RX Smart Tools logo</title>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2" />
+          </svg>
+        </div>
+        <span class="text-xl font-bold">RX Smart Tools</span>
+      </a>
+    </div>
+
+    <!-- Desktop navigation links; hidden on small screens to keep header compact -->
+    <div class="hidden md:flex items-center space-x-3" role="menubar" aria-label="Secondary navigation">
+      <a role="menuitem" href="{{ url_for('pdf.smart_index') }}"
+        class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">PDF Toolbox</a>
+      <a role="menuitem" href="{{ url_for('excel.excel_tool') }}"
+        class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Excel Comparator</a>
+    </div>
+  </nav>
+
+  <!-- Hero / header: prominent call-to-action area. -->
+  <header class="container mx-auto px-6" aria-hidden="false">
+    <div class="rounded-xl p-8 glass shadow-sm overflow-hidden">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+        <div>
+          <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-gray-900">
+            PDF & Excel utilities tools
+          </h1>
+          <p class="mt-4 text-lg text-gray-700">
+            Smart split, merge, preview files, and compare Excel sheets — fast
+            and simple interface built for productivity.
+          </p>
+        </div>
+
+        <!-- Decorative illustration: mark as presentational for assistive tech -->
+        <div class="hidden md:flex justify-center file-graphic" aria-hidden="true">
+          <svg width="280" height="220" viewBox="0 0 280 220" fill="none" xmlns="http://www.w3.org/2000/svg" role="img"
+            aria-hidden="true">
+            <title>Illustration showing a PDF file and an Excel file</title>
+            <desc>
+              Two stylized file icons: a red PDF document and a green Excel
+              document with a small spreadsheet grid.
+            </desc>
+
+            <!-- subtle drop shadow -->
+            <defs>
+              <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.08" />
+              </filter>
+            </defs>
+
+            <!-- Background rounded card for contrast -->
+            <rect x="6" y="6" width="268" height="208" rx="12" fill="#f8fafc" stroke="#e6eef9" />
+
+            <!-- PDF file (left, slightly behind) - wrapped in an anchor to make clickable -->
+            <a href="{{ url_for('pdf.smart_index') }}" class="file-link pdf-file" aria-label="Open PDF toolbox">
+              <g transform="translate(28,28)" filter="url(#shadow)">
+                <rect x="0" y="0" width="110" height="150" rx="8" fill="#fff5f5" stroke="#fbcaca" />
+                <!-- folded corner -->
+                <path d="M86 0h24v24" fill="#fee2e2" />
+                <path d="M86 0v24h24" fill="none" stroke="#fca5a5" stroke-width="1" />
+                <!-- document lines -->
+                <rect x="12" y="18" width="86" height="10" rx="3" fill="#fff2f2" />
+                <rect x="12" y="36" width="78" height="8" rx="3" fill="#fff2f2" />
+                <rect x="12" y="54" width="96" height="8" rx="3" fill="#fff2f2" />
+                <rect x="12" y="72" width="56" height="8" rx="3" fill="#fff2f2" />
+                <!-- PDF label -->
+                <rect x="12" y="112" width="86" height="26" rx="6" fill="#fff" />
+                <text x="20" y="132" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700"
+                  fill="#b91c1c">
+                  PDF
+                </text>
+              </g>
+            </a>
+
+            <!-- Excel file (right, front) - wrapped in anchor so click takes to Excel toolbox -->
+            <a href="{{ url_for('excel.excel_tool') }}" class="file-link excel-file" aria-label="Open Excel toolbox">
+              <g transform="translate(120,20)" filter="url(#shadow)">
+                <rect x="0" y="0" width="140" height="170" rx="10" fill="#ecfdf5" stroke="#bbf7d0" />
+                <!-- folded corner -->
+                <path d="M110 0h30v30" fill="#bbf7d0" />
+                <path d="M110 0v30h30" fill="none" stroke="#34d399" stroke-width="1" />
+                <!-- header band -->
+                <rect x="12" y="14" width="116" height="24" rx="6" fill="#dcfce7" />
+                <!-- small grid representing a sheet -->
+                <g transform="translate(18,46)">
+                  <rect x="0" y="0" width="88" height="70" rx="4" fill="#ffffff" />
+                  <!-- grid lines -->
+                  <g stroke="#d1fae5" stroke-width="2">
+                    <line x1="0" y1="23" x2="88" y2="23" />
+                    <line x1="0" y1="46" x2="88" y2="46" />
+                    <line x1="22" y1="0" x2="22" y2="70" />
+                    <line x1="44" y1="0" x2="44" y2="70" />
+                    <line x1="66" y1="0" x2="66" y2="70" />
+                  </g>
+                  <!-- a highlighted cell to imply differences -->
+                  <rect x="44" y="23" width="22" height="23" rx="2" fill="#bbf7d0" />
+                </g>
+                <!-- XLSX label -->
+                <rect x="12" y="128" width="116" height="30" rx="6" fill="#fff" />
+                <text x="22" y="148" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700"
+                  fill="#047857">
+                  XLSX
+                </text>
+              </g>
+            </a>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main content: contains optional flash message and tool cards. -->
+  <main id="main-content" class="container mx-auto px-6 mt-8" role="main">
     {% if cleared_msg %}
-    <div class="bg-green-100 border border-green-200 text-green-700 p-3 rounded mb-4">
+    <!-- cleared_msg: server-side flash that indicates files or caches were cleared. -->
+    <div class="mb-6 p-4 rounded-md bg-green-50 border border-green-200 text-green-800">
       {{ cleared_msg }}
     </div>
     {% endif %}
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div class="bg-white p-4 rounded shadow">
-        <h2 class="font-semibold mb-2">Smart Split &amp; Merge (PDF Toolbox)</h2>
-        <a class="inline-block mt-2 px-4 py-2 bg-blue-500 text-white rounded" href="{{ url_for('pdf.smart_index') }}">Open Tool</a>
-      </div>
-      <div class="bg-white p-4 rounded shadow">
-        <h2 class="font-semibold mb-2">Saved Files</h2>
-        <a class="inline-block mt-2 px-4 py-2 bg-green-600 text-white rounded" href="{{ url_for('files.saved_files') }}">View Saved Files</a>
-      </div>
-      <div class="bg-white p-4 rounded shadow">
-        <h2 class="font-semibold mb-2">Excel Comparator</h2>
-        <a class="inline-block mt-2 px-4 py-2 bg-purple-500 text-white rounded" href="{{ url_for('excel.excel_tool') }}">Go to Excel Tool</a>
-      </div>
+
+    <section class="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+      <!-- Card: PDF Toolbox (red accent) -->
+      <article class="card-float bg-white rounded-xl p-4 shadow-sm" aria-labelledby="pdf-card-title" role="region"
+        aria-label="PDF tools card">
+        <div class="flex items-start space-x-3">
+          <div class="p-3 rounded-lg bg-red-50 text-red-600">
+            <!-- unified document icon - colored by container text color -->
+            <svg class="unified-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img">
+              <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.12" />
+              <path d="M8 7h8v2H8zM8 11h6v2H8z" fill="currentColor" />
+            </svg>
+          </div>
+
+          <div class="flex-1">
+            <h3 id="pdf-card-title" class="text-base font-semibold text-red-700">
+              PDF Toolbox
+            </h3>
+            <p class="mt-1 text-sm text-gray-600">
+              Split, merge, preview and extract pages quickly — lightweight
+              and fast.
+            </p>
+            <div class="mt-3">
+              <a href="{{ url_for('pdf.smart_index') }}"
+                class="inline-flex items-center px-3 py-1.5 bg-red-600 text-white text-sm rounded-md shadow-sm">
+                <!-- small icon to left matching color -->
+                <svg class="unified-icon mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="2" y="2" width="20" height="20" rx="3" fill="#fff" opacity="0.06" />
+                  <path d="M8 8h8v2H8z" fill="#fff" />
+                </svg>
+                Open PDF Toolbox
+              </a>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Card: Excel Comparator (green accent) -->
+      <article class="card-float bg-white rounded-xl p-4 shadow-sm" aria-labelledby="excel-card-title" role="region"
+        aria-label="Excel tools card">
+        <div class="flex items-start space-x-3">
+          <div class="p-3 rounded-lg bg-green-50 text-green-600">
+            <svg class="unified-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img">
+              <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.12" />
+              <path d="M8 7h8v2H8zM8 11h6v2H8z" fill="currentColor" />
+            </svg>
+          </div>
+
+          <div class="flex-1">
+            <h3 id="excel-card-title" class="text-base font-semibold text-green-700">
+              Excel Comparator
+            </h3>
+            <p class="mt-1 text-sm text-gray-600">
+              Quickly compare sheets and get row-level differences highlighted
+              for easy review.
+            </p>
+            <div class="mt-3">
+              <a href="{{ url_for('excel.excel_tool') }}"
+                class="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-sm rounded-md shadow-sm">
+                <svg class="unified-icon mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="2" y="2" width="20" height="20" rx="3" fill="#fff" opacity="0.06" />
+                  <path d="M8 8h8v2H8z" fill="#fff" />
+                </svg>
+                Open Excel Toolbox
+              </a>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Card: Saved Files (teal accent) -->
+      <article class="card-float bg-white rounded-xl p-4 shadow-sm" aria-labelledby="saved-card-title">
+        <div class="flex items-start space-x-3">
+          <div class="p-3 rounded-lg bg-sky-50 text-sky-600">
+            <svg class="unified-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img">
+              <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity="0.12" />
+              <path d="M6 10h12v2H6zM6 14h8v2H6z" fill="currentColor" />
+            </svg>
+          </div>
+          <div class="flex-1">
+            <h3 id="saved-card-title" class="text-lg font-semibold text-sky-700">
+              Saved Files
+            </h3>
+            <p class="mt-2 text-sm text-gray-600">
+              Browse previously processed files, download or remove items you
+              no longer need.
+            </p>
+            <div class="mt-3">
+                <a href="{{ url_for('files.saved_files') }}"
+                class="inline-flex items-center px-3 py-1.5 bg-white-600 text-black text-sm rounded-md shadow-sm">
+                <svg class="unified-icon mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="2" y="2" width="20" height="20" rx="3" fill="#000" opacity="0.06" />
+                  <path d="M8 8h8v2H8z" fill="#000" />
+                </svg>
+                View Saved Files
+              </a>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <div class="mt-10 text-center text-sm text-gray-500">
+      Need a specific feature? Reach out to the maintainer for enhancements.
     </div>
-  </div>
+  </main>
+
+  <footer role="contentinfo" class="mt-12 py-8">
+    <div class="container mx-auto text-center text-sm text-gray-600">
+      &copy; RX Smart Tools
+    </div>
+  </footer>
+  <!-- Small JS helper: when hovering/focusing an SVG file anchor, move it to end of the SVG so it renders on top -->
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      try {
+        const container = document.querySelector(".file-graphic");
+        if (!container) return;
+        const svg = container.querySelector("svg");
+        if (!svg) return;
+
+        const anchors = svg.querySelectorAll("a.file-link");
+        anchors.forEach((a) => {
+          // mouse enter / focus: bring to front and add popped class
+          a.addEventListener("mouseenter", () => {
+            try {
+              svg.appendChild(a);
+            } catch (e) {
+              /* ignore in old browsers */
+            }
+            a.classList.add("popped");
+          });
+          a.addEventListener("focus", () => {
+            try {
+              svg.appendChild(a);
+            } catch (e) { }
+            a.classList.add("popped");
+          });
+
+          // mouse leave / blur: remove popped class
+          a.addEventListener("mouseleave", () => {
+            a.classList.remove("popped");
+          });
+          a.addEventListener("blur", () => {
+            a.classList.remove("popped");
+          });
+        });
+      } catch (err) {
+        // no-op: we don't want to break page if script errors
+        console.warn("file-graphic script error", err);
+      }
+    });
+  </script>
 </body>
+
 </html>

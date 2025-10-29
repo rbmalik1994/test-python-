@@ -47,6 +47,6 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5001))
     LOGGER.info("Starting development server on port %s", port)
     app.run(debug=True, port=port)
