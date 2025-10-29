@@ -24,14 +24,14 @@ from ..utils.filesystem import resolve_upload_path, timestamped_name
 
 LOGGER = logging.getLogger(__name__)
 
-bp = Blueprint("pdf", __name__, url_prefix="/smart_split_merge")
+bp = Blueprint("pdf", __name__, url_prefix="/pdf_tool_box")
 
 
 @bp.route("/")
 def smart_index():
     """Show the smart PDF toolbox UI."""
 
-    return render_template("smart_split_merge.html")
+    return render_template("pages/pdf_toolbox.html")
 
 
 @bp.route("/upload", methods=["POST"])

@@ -1,0 +1,952 @@
+<!doctype html>
+<!--
+  Template: templates/pages/pdf_toolbox.html
+  Purpose: Smart PDF Toolbox page — upload PDFs, preview thumbnails, select pages,
+           and perform actions like split, merge, compress, rotate, and export.
+
+  Notes for maintainers:
+  - This file is a Jinja template and uses `url_for` to build route URLs. Keep
+    those constructs intact (e.g. {{ url_for('pdf.smart_upload') }}).
+  - The header/navigation and footer were aligned with `templates/index.html`
+    to provide consistent site navigation and accessibility features.
+  - This refactor replaces Bootstrap with Tailwind utility classes and adds a
+    small mascot + confetti surprise when generation succeeds.
+-->
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Smart PDF Toolbox</title>
+  <!-- Use Tailwind CDN (lightweight quick-edit) to restyle the page. For
+       production consider building Tailwind locally and purging unused styles. -->
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+
+  <style>
+    /* kept small helper styles for thumbnails and sticky actions */
+    body {
+      padding-bottom: 180px;
+    }
+
+    .thumb-wrapper {
+      display: inline-block;
+      margin: 6px;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    #pagesList {
+      max-height: 360px;
+      overflow: auto;
+    }
+
+    #thumbs {
+      max-height: 360px;
+      overflow: auto;
+      white-space: normal;
+    }
+
+    .angle-display {
+      margin-left: 8px;
+      font-weight: 600;
+      color: #111827;
+    }
+
+    /* mascot animation */
+    @keyframes wave {
+      0% {
+        transform: translateY(0) rotate(0deg);
+      }
+
+      25% {
+        transform: translateY(-3px) rotate(-3deg);
+      }
+
+      50% {
+        transform: translateY(0) rotate(0deg);
+      }
+
+      75% {
+        transform: translateY(-2px) rotate(2deg);
+      }
+
+      100% {
+        transform: translateY(0) rotate(0deg);
+      }
+    }
+
+    /* confetti canvas sits above content during celebrations */
+    #confetti-canvas {
+      position: fixed;
+      pointer-events: none;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      z-index: 9999;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-100 text-gray-800">
+  <a class="sr-only focus:not-sr-only p-4 bg-white text-blue-700 rounded-md absolute" href="#main-content">Skip to
+    content</a>
+
+  <!-- Header / Navigation: site branding and top-level links -->
+  <nav role="navigation" aria-label="Main navigation"
+    class="container mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <a href="{{ url_for('main.index') }}" class="flex items-center space-x-3" aria-label="RX Smart Tools home">
+        <div class="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            role="img" aria-hidden="false">
+            <title>RX Smart Tools logo</title>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2" />
+          </svg>
+        </div>
+        <span class="text-xl font-bold">RX Smart Tools</span>
+      </a>
+      </a>
+    </div>
+
+    <div class="hidden md:flex items-center space-x-3 text-sm">
+      <a href="{{ url_for('pdf.smart_index') }}" class="px-2 py-1 rounded-md hover:bg-gray-100">PDF Toolbox</a>
+      <a href="{{ url_for('excel.excel_tool') }}" class="px-2 py-1 rounded-md hover:bg-gray-100">Excel Toolbox</a>
+      <a href="{{ url_for('files.saved_files') }}" class="px-2 py-1 rounded-md hover:bg-gray-100">Saved Files</a>
+    </div>
+  </nav>
+
+  <!-- Main content: PDF toolbox workspace -->
+  <main id="main-content" class="container mx-auto px-4 mt-6">
+    <div class="bg-white/70 backdrop-blur-md rounded-xl p-6 shadow-sm">
+
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-4 w-full">
+          <div
+            class="w-12 h-12 flex items-center justify-center bg-white rounded-lg shadow-sm border border-red-100 flex-shrink-0">
+            <svg viewBox="0 0 64 64" class="w-8 h-8" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img"
+              focusable="false">
+              <rect x="8" y="6" width="48" height="52" rx="6" fill="#ef4444" />
+              <text x="20" y="36" fill="#fff" font-size="10" font-weight="700">PDF</text>
+            </svg>
+          </div>
+
+          <div class="flex-1 min-w-0">
+            <h1 class="text-2xl sm:text-3xl font-extrabold leading-tight">
+              Smart PDF Toolbox
+            </h1>
+            <p class="mt-1 text-gray-600">Upload PDFs, preview thumbnails, select pages, then split/merge/rotate or
+              export.</p>
+          </div>
+
+          <div class="w-1/3 min-w-[220px]">
+            <label for="pdfUpload" class="block text-sm font-medium text-gray-700 sr-only">Upload PDF</label>
+
+            <!-- Entire dashed area is the browse target and supports drag/drop.
+         Reduced height (h-36) and added clear file button. -->
+            <div id="uploadDrop"
+              class="relative mt-3 flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-md cursor-pointer bg-red-50 hover:bg-red-100 text-center w-full h-36"
+              role="button" tabindex="0" aria-label="Upload PDF, click or drag and drop"
+              onclick="document.getElementById('pdfUpload').click()"
+              onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); document.getElementById('pdfUpload').click(); }">
+              <div class="flex flex-col items-center">
+                <div class="text-red-600 text-4xl">📄</div>
+                <div class="mt-2 text-sm text-gray-600">Drag &amp; drop a PDF here, or click to browse</div>
+                <div class="mt-2 text-xs text-gray-500">Supported: .pdf</div>
+              </div>
+
+              <!-- Clear file button (top-right of drop area) -->
+              <button id="clearFileBtn" type="button"
+                class="absolute top-2 right-2 text-xs px-2 py-1 bg-white border rounded-md text-gray-600 hover:bg-gray-50"
+                aria-label="Clear uploaded file"
+                onclick="(function(){ try{ const f = document.getElementById('pdfUpload'); if(f) f.value=''; const filename = window.uploadedFilename || ''; if(filename && typeof uploadUrl !== 'undefined'){ try{ fetch(uploadUrl, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }) }).catch(()=>{}); }catch(e){} } window.uploadedFilename=''; window.uploadedFiles = []; if(typeof updateUploadedFilesSelect==='function') updateUploadedFilesSelect(); // ensure visible explorer and hidden select are reset
+                  const explorerList = document.getElementById('uploadedFilesExplorerList'); if(explorerList) explorerList.innerHTML = '<div class=\'text-xs text-gray-400 italic\'>No uploaded files yet.</div>'; const filesCount = document.getElementById('uploadedFilesCount'); if(filesCount) filesCount.innerText = '0'; const sel = document.getElementById('uploadedFilesSelect'); if(sel) sel.innerHTML = '<option value=\'\'>-- Select uploaded file --</option>'; const toggle = document.getElementById('explorerToggle'); if(toggle){ toggle.innerText = '−'; toggle.setAttribute('aria-expanded', 'true'); }
+                  const thumbs = document.getElementById('thumbs'); if(thumbs) thumbs.innerHTML=''; const pages = document.getElementById('pagesList'); if(pages) pages.innerHTML=''; const nameEl = document.getElementById('uploadedName'); if(nameEl) nameEl.innerText=''; const gen = document.getElementById('generatedList'); if(gen) gen.innerHTML=''; window.pageRotations = {}; window.selectedPages = []; document.querySelectorAll('.action-checkbox').forEach(n=>n.checked=false); document.querySelectorAll('.tool-btn').forEach(b=>{ b.classList.remove('bg-red-50','border-red-300'); }); }catch(e){} })();">
+                Clear
+              </button>
+
+              <!-- Hidden native file input; clicking the entire area opens it. -->
+              <input id="pdfUpload" type="file" accept="application/pdf" class="hidden" multiple />
+
+              <!-- Uploaded filename feedback (centered at bottom) -->
+              <div class="absolute left-1/2 transform -translate-x-1/2 bottom-3 px-2">
+                <span id="uploadedName" class="text-sm text-gray-600 truncate max-w-[180px] block"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Smart tool area -->
+      <!-- Inline toggle-group toolbox: placed under the Smart PDF Toolbox header and above the pages section.
+        Keeps same hidden checkboxes and IDs so existing JS logic remains unchanged. -->
+      <div id="inlineToolGroupContainer" class="mt-4">
+        <div id="inlineToolGroup" role="toolbar" aria-label="PDF Actions" class="flex flex-wrap items-center gap-2">
+          <!-- hidden checkboxes (server logic unchanged) -->
+          <input class="sr-only action-checkbox" type="checkbox" value="compress" id="chk-compress" />
+          <input class="sr-only action-checkbox" type="checkbox" value="merge" id="chk-merge" />
+          <input class="sr-only action-checkbox" type="checkbox" value="split" id="chk-split" />
+          <input class="sr-only action-checkbox" type="checkbox" value="remove" id="chk-remove" />
+          <input class="sr-only action-checkbox" type="checkbox" value="rotate" id="chk-rotate" />
+
+          <!-- Toggle buttons -->
+          <button type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+         data-action="compress" aria-pressed="false" title="Compress">
+         <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h4l3 10h4l3-10h4"></path>
+         </svg>
+         Compress
+          </button>
+
+          <button type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+         data-action="merge" aria-pressed="false" title="Merge Selected Pages">
+         <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h4l3 10h4l3-10h4"></path>
+         </svg>
+         Merge
+          </button>
+
+          <button type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+         data-action="split" aria-pressed="false" title="Split">
+         <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14"></path>
+         </svg>
+         Split
+          </button>
+
+          <button type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+         data-action="remove" aria-pressed="false" title="Remove pages">
+         <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+         </svg>
+         Remove
+          </button>
+
+          <div class="flex items-center space-x-2">
+         <button type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+           data-action="rotate" aria-pressed="false" title="Rotate">
+           <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v6h6"></path>
+           </svg>
+           Rotate
+         </button>
+
+         <label for="rotateAngle" class="sr-only">Rotate angle</label>
+         <select id="rotateAngle" class="rounded-md border text-sm p-1" aria-label="Rotate angle">
+           <option value="90">90°</option>
+           <option value="180">180°</option>
+           <option value="270">270°</option>
+         </select>
+
+         <button id="rotateSelectedBtn" type="button" class="px-3 py-2 bg-red-100 text-red-700 rounded-md border text-sm">Rotate Selected</button>
+          </div>
+
+          <div class="ml-2">
+         <button id="generateBtn" type="button" class="px-4 py-2 bg-red-600 text-white rounded-md shadow text-sm">Generate</button>
+          </div>
+        </div>
+
+        <div class="mt-2 text-xs text-gray-500">Tip: toggle tools to enable actions, select pages from the left column, then click Generate.</div>
+      </div>
+
+      <script>
+        // Make the inline toggle-group keyboard accessible and keep hidden checkboxes in sync.
+        (function () {
+          const group = document.getElementById('inlineToolGroup');
+          if (!group) return;
+
+          group.addEventListener('click', (ev) => {
+         const btn = ev.target.closest('.tool-btn');
+         if (!btn) return;
+         const action = btn.getAttribute('data-action');
+         if (!action) return;
+         const checkbox = Array.from(document.querySelectorAll('.action-checkbox')).find(n => n.value === action);
+         if (!checkbox) return;
+         checkbox.checked = !checkbox.checked;
+         const pressed = checkbox.checked;
+         btn.setAttribute('aria-pressed', String(pressed));
+         btn.classList.toggle('bg-red-50', pressed);
+         btn.classList.toggle('border-red-300', pressed);
+         if (typeof updateCompressInfo === 'function') updateCompressInfo();
+          });
+
+          // keyboard activation for each button
+          group.querySelectorAll('.tool-btn').forEach(b => {
+         b.setAttribute('tabindex', '0');
+         b.addEventListener('keydown', (ev) => {
+           if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); b.click(); }
+         });
+          });
+        })();
+      </script>
+
+      <div class="mt-6 grid grid-cols-1 md:grid-cols-12 gap-6">
+        <!-- Left column: Pages list and per-page controls -->
+        <section class="md:col-span-3 bg-white rounded-lg p-4 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold">Pages</h3>
+            <div class="space-x-2">
+              <button id="selectAllBtn"
+                class="inline-flex items-center px-2 py-1 text-sm bg-red-600 text-white rounded-md">Select All</button>
+              <button id="clearAllBtn"
+                class="inline-flex items-center px-2 py-1 text-sm bg-gray-100 rounded-md text-gray-700">Clear</button>
+            </div>
+          </div>
+          <!-- When multiple files are uploaded the user can switch between them -->
+          <div class="mb-3">
+            <label for="uploadedFilesSelect" class="sr-only">Select uploaded file</label>
+            <!-- Explorer-style uploaded files (VS Code-like) -->
+            <div id="uploadedFilesExplorer" class="border border-gray-200 rounded-md bg-white p-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                  <svg class="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
+                  </svg>
+                  <span class="font-medium text-sm">Uploaded Files</span>
+                  <span id="uploadedFilesCount" class="ml-2 text-xs text-gray-500">0</span>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                  <button id="explorerToggle" type="button" aria-expanded="true"
+                    class="text-sm text-gray-500 px-2 py-1 rounded hover:bg-gray-100">−</button>
+                </div>
+              </div>
+
+              <div id="uploadedFilesExplorerList" class="mt-2 space-y-1 max-h-40 overflow-auto">
+                <!-- items rendered dynamically from the (hidden) select below -->
+                <div class="text-xs text-gray-400 italic">No uploaded files yet.</div>
+              </div>
+
+              <div class="mt-2 text-xs text-gray-500">Tip: click "Open" to load a file into the workspace; use the
+                checkbox to mark it for batch operations.</div>
+
+              <!-- Hidden legacy select (kept for existing JS compatibility). The visible explorer mirrors this. -->
+              <select id="uploadedFilesSelect" class="hidden" aria-hidden="true">
+                <option value="">-- Select uploaded file --</option>
+              </select>
+
+              <script>
+                // Render/bridge code that mirrors options in the hidden select into a VS Code-style explorer.
+                document.addEventListener('DOMContentLoaded', () => {
+                  const sel = document.getElementById('uploadedFilesSelect');
+                  const list = document.getElementById('uploadedFilesExplorerList');
+                  const toggle = document.getElementById('explorerToggle');
+                  const count = document.getElementById('uploadedFilesCount');
+
+                  function makeItem(opt) {
+                    const serverName = opt.value;
+                    if (!serverName) return null;
+                    // try to find richer metadata from global uploadedFiles (populated by main script)
+                    const meta = (window.uploadedFiles || []).find(f => f.serverName === serverName) || {};
+                    const label = meta.clientName || opt.text || serverName;
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'flex items-center justify-between p-2 rounded hover:bg-gray-50';
+                    wrapper.innerHTML = `
+                      <div class="flex items-center space-x-2">
+                        <input type="checkbox" class="explorer-file-checkbox" data-server="${serverName}" aria-label="Select ${label}" />
+                        <div class="flex flex-col">
+                          <span class="text-sm truncate" style="max-width:200px">${label}</span>
+                          <span class="text-xs text-gray-400">${meta.total_pages ? meta.total_pages + ' pages' : ''} ${meta.size ? '(' + Math.round(meta.size / 1024) + ' KB)' : ''}</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center space-x-2">
+                        <button class="open-file-btn text-xs px-2 py-1 bg-white border rounded text-gray-600" data-server="${serverName}">Open</button>
+                        <button class="preview-file-btn text-xs px-2 py-1 bg-white border rounded text-gray-600" data-server="${serverName}">Preview</button>
+                      </div>
+                    `;
+                    return wrapper;
+                  }
+
+                  function render() {
+                    // clear and rebuild from select options (keeps single source of truth)
+                    list.innerHTML = '';
+                    const opts = Array.from(sel.options || []).filter(o => o.value);
+                    if (!opts.length) {
+                      list.innerHTML = '<div class="text-xs text-gray-400 italic">No uploaded files yet.</div>';
+                      count.innerText = '0';
+                      return;
+                    }
+                    opts.forEach(o => {
+                      const item = makeItem(o);
+                      if (item) list.appendChild(item);
+                    });
+                    count.innerText = String(opts.length);
+                  }
+
+                  // observe changes to the hidden select (updateUploadedFilesSelect writes here)
+                  const mo = new MutationObserver(render);
+                  mo.observe(sel, { childList: true, subtree: false });
+
+                  // also run once on load
+                  render();
+
+                  // toggle collapse
+                  toggle.addEventListener('click', () => {
+                    const hidden = list.classList.toggle('hidden');
+                    toggle.innerText = hidden ? '+' : '−';
+                    toggle.setAttribute('aria-expanded', String(!hidden));
+                  });
+
+                  // delegate clicks inside the explorer list
+                  list.addEventListener('click', (ev) => {
+                    const openBtn = ev.target.closest('.open-file-btn');
+                    if (openBtn) {
+                      const server = openBtn.getAttribute('data-server');
+                      if (server) {
+                        // set hidden select value to trigger existing change handler
+                        sel.value = server;
+                        sel.dispatchEvent(new Event('change', { bubbles: true }));
+                      }
+                      return;
+                    }
+                    const previewBtn = ev.target.closest('.preview-file-btn');
+                    if (previewBtn) {
+                      const server = previewBtn.getAttribute('data-server');
+                      if (server) {
+                        // try to find metadata to know pages; fallback to last-known uploadedFiles entry
+                        const meta = (window.uploadedFiles || []).find(f => f.serverName === server);
+                        const pages = (meta && meta.total_pages) || meta && meta.total_pages || 1;
+                        try {
+                          // call existing loader functions if available
+                          if (typeof loadThumbnails === 'function') {
+                            loadThumbnails((typeof uploadsPreviewBase !== 'undefined' ? uploadsPreviewBase : '') + server, pages);
+                          }
+                          if (typeof loadPages === 'function' && meta && meta.total_pages) {
+                            loadPages(meta.total_pages);
+                            // mark as active filename
+                            window.uploadedFilename = server;
+                            const nameEl = document.getElementById('uploadedName');
+                            if (nameEl && meta.clientName) nameEl.innerText = meta.clientName;
+                          }
+                        } catch (e) { /* non-fatal */ }
+                      }
+                      return;
+                    }
+                    const checkbox = ev.target.closest('.explorer-file-checkbox');
+                    if (checkbox) {
+                      // delegate: toggling these checkboxes is purely UI for batch selection.
+                      // You can read selected servers via document.querySelectorAll('.explorer-file-checkbox:checked')
+                    }
+                  });
+                });
+              </script>
+            </div>
+          </div>
+          <div id="pagesList" class="border border-gray-200 rounded-md p-2 h-64 overflow-auto bg-gray-50"></div>
+        </section>
+
+        <!-- Center column: Upload area and Thumbnails preview -->
+        <section class="md:col-span-6 bg-white rounded-lg p-4 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+
+            <div class="text-sm text-gray-500">Preview Thumbnails</div>
+          </div>
+          <div id="thumbs"
+            class="rounded-md border border-gray-100 p-2 h-80 overflow-auto bg-white grid grid-cols-2 sm:grid-cols-3 gap-2">
+          </div>
+        </section>
+
+        <!-- Right column: Generated files list and action controls (export, rotate input) -->
+        <section class="md:col-span-3 bg-white rounded-lg p-4 shadow-sm">
+          <h3 class="font-semibold mb-3">Generated / Actions</h3>
+          <ul id="generatedList" class="space-y-2 text-sm"></ul>
+
+          <div id="compressInfo" class="mt-3 text-sm text-gray-600 hidden">
+            <div>Original size: <span id="origSize">-</span></div>
+            <div>Estimated compressed size: <span id="estSize">-</span></div>
+          </div>
+
+          <div class="mt-4 space-y-2">
+            <button id="pdfToWordBtn"
+              class="w-full inline-flex justify-center items-center px-3 py-2 bg-white border rounded-md text-sm">Export
+              Selected → Word</button>
+            <button id="pdfToExcelBtn"
+              class="w-full inline-flex justify-center items-center px-3 py-2 bg-white border rounded-md text-sm">Export
+              Selected → Excel</button>
+          </div>
+
+          <div class="mt-4 text-xs text-gray-500">Rotate by page numbers (e.g. <code>1,3,5-7</code>) or use per-page
+            buttons.</div>
+          <input id="rotatePagesInput" class="mt-2 block w-full text-sm border rounded-md p-2"
+            placeholder="e.g. 1,3,5-7">
+        </section>
+      </div>
+
+      
+    </div>
+
+    <footer role="contentinfo" class="mt-6 py-6 text-center text-sm text-gray-600">
+      &copy; RX Smart Tools
+    </footer>
+  </main>
+
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- Scripts: PDF.js (for client-side thumbnails) and application JS logic -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+  <script>
+    const uploadUrl = "{{ url_for('pdf.smart_upload') }}";
+    const processUrl = "{{ url_for('pdf.smart_process') }}";
+    const pdfToWordUrl = "{{ url_for('pdf.pdf_to_word') }}";
+    const pdfToExcelUrl = "{{ url_for('pdf.pdf_to_excel') }}";
+    const uploadsPreviewBase = "{{ url_for('pdf.serve_upload', filename='') }}";
+    const generatedBase = "{{ url_for('pdf.serve_generated', filename='') }}";
+
+    let uploadedFilename = '';
+    let selectedPages = [];
+    let pageRotations = {};
+    let uploadedFiles = []; // { clientName, size, serverName, total_pages }
+
+    // uploadFile(file): send the PDF file to the server via `uploadUrl`.
+    // On success the server should return { filename, total_pages } which
+    // we use to populate the pages list and render thumbnails.
+    async function uploadFile(file) {
+      const fd = new FormData();
+      fd.append('pdf', file);
+      const res = await fetch(uploadUrl, { method: 'POST', body: fd });
+      if (!res.ok) { alert('Upload failed'); return null; }
+      const data = await res.json();
+      if (data && data.filename) {
+        // store the returned filename (server path) and update multi-file state
+        const fileObj = { clientName: file.name, size: file.size, serverName: data.filename, total_pages: data.total_pages };
+        uploadedFilename = data.filename;
+        // update uploaded files registry and UI
+        uploadedFiles.push(fileObj);
+        updateUploadedFilesSelect();
+        // show last uploaded name in the upload area
+        const nameEl = document.getElementById('uploadedName');
+        if (nameEl) nameEl.innerText = fileObj.clientName;
+        // load pages and thumbnails for the active file
+        loadPages(data.total_pages);
+        loadThumbnails(`${uploadsPreviewBase}${uploadedFilename}`, data.total_pages);
+      } else {
+        alert('Upload failed');
+      }
+    }
+
+    // makePageRow(i): create a DOM row for page `i` containing
+    // - a checkbox to select the page
+    // - a per-page rotate button (increments rotation by 90°)
+    // - a remove button to delete the page locally from the UI
+    function makePageRow(i) {
+      const div = document.createElement('div');
+      div.className = 'flex items-center justify-between p-2 bg-white rounded-md mb-2 border border-gray-100';
+      div.innerHTML = `
+        <div class="flex items-center">
+          <input class="page-checkbox" type="checkbox" value="${i}" id="p${i}" />
+          <label for="p${i}" class="ml-2 text-sm">Page ${i}</label>
+        </div>
+        <div class="flex items-center">
+          <button class="rotate-btn text-red-600" data-page="${i}" title="Rotate page by 90°">🔁</button>
+          <span id="angle-${i}" class="angle-display text-sm ml-2">0°</span>
+          <button class="remove-page-btn ml-3 text-sm text-gray-500" data-page="${i}" title="Remove this page">🗑️</button>
+        </div>
+      `;
+      return div;
+    }
+
+    // loadPages(total): populate the left-side pages list with rows
+    // for each page (1..total). Also attaches event handlers for
+    // checkbox changes, per-page rotate and per-page remove actions.
+    function loadPages(total) {
+      const container = document.getElementById('pagesList');
+      container.innerHTML = '';
+      selectedPages = [];
+      pageRotations = {};
+      for (let i = 1; i <= total; i++) {
+        const row = makePageRow(i);
+        container.appendChild(row);
+      }
+
+      document.querySelectorAll('.page-checkbox').forEach(cb => {
+        cb.addEventListener('change', function () {
+          const val = parseInt(this.value, 10);
+          if (this.checked) {
+            if (!selectedPages.includes(val)) selectedPages.push(val);
+          } else {
+            selectedPages = selectedPages.filter(x => x !== val);
+          }
+        });
+      });
+
+      document.querySelectorAll('.rotate-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+          const p = parseInt(this.getAttribute('data-page'), 10);
+          if (!pageRotations[p]) pageRotations[p] = 0;
+          pageRotations[p] = (pageRotations[p] + 90) % 360;
+          document.getElementById(`angle-${p}`).innerText = pageRotations[p] + '°';
+          // update thumbnail preview immediately
+          const thumb = document.getElementById(`thumb-p${p}`);
+          if (thumb) {
+            thumb.style.transform = `rotate(${pageRotations[p]}deg)`;
+            thumb.style.transition = 'transform 240ms ease';
+          }
+        });
+      });
+
+      // per-page remove
+      document.querySelectorAll('.remove-page-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+          const p = parseInt(this.getAttribute('data-page'), 10);
+          // remove row
+          const row = this.closest('div');
+          if (row) row.remove();
+          // remove thumbnail
+          const thumb = document.getElementById(`thumb-p${p}`);
+          if (thumb) thumb.remove();
+          // cleanup selection and rotations
+          selectedPages = selectedPages.filter(x => x !== p);
+          delete pageRotations[p];
+          const angleEl = document.getElementById(`angle-${p}`);
+          if (angleEl) angleEl.innerText = 'removed';
+        });
+      });
+    }
+
+    // loadThumbnails(url, total): use PDF.js to render thumbnails for
+    // each page from the uploaded PDF URL. Each thumbnail wrapper is
+    // given an id `thumb-p{n}` so the UI can rotate or remove it.
+    async function loadThumbnails(url, total) {
+      try {
+        const pdf = await pdfjsLib.getDocument(url).promise;
+        const thumbs = document.getElementById('thumbs');
+        thumbs.innerHTML = '';
+        for (let i = 1; i <= total; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 0.7 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          const wrapper = document.createElement('div');
+          wrapper.className = 'thumb-wrapper bg-gray-50 p-1 rounded-md flex items-center justify-center';
+          wrapper.id = `thumb-p${i}`;
+          wrapper.dataset.page = i;
+          // make canvas id for targeted transforms
+          canvas.id = `canvas-p${i}`;
+          canvas.style.display = 'block';
+          canvas.style.maxWidth = '100%';
+          canvas.style.height = 'auto';
+          wrapper.style.transition = 'transform 240ms ease';
+          wrapper.appendChild(canvas);
+          // caption / small label
+          const label = document.createElement('div');
+          label.className = 'text-xs text-gray-600 mt-1 text-center';
+          label.innerText = `Page ${i}`;
+          const container = document.createElement('div');
+          container.className = 'flex flex-col items-center';
+          container.appendChild(wrapper);
+          container.appendChild(label);
+          thumbs.appendChild(container);
+        }
+      } catch (err) {
+        console.warn('thumbnail load failed', err);
+      }
+    }
+
+    // file input change: when a user selects a file via the hidden
+    // file input we forward it to uploadFile.
+    document.getElementById('pdfUpload').addEventListener('change', e => {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+      // upload sequentially
+      (async function () {
+        for (const f of files) {
+          await uploadFile(f);
+        }
+      })();
+    });
+
+    // Browse button triggers the hidden file input
+    const browseBtn = document.getElementById('browseBtn');
+    if (browseBtn) {
+      browseBtn.addEventListener('click', () => {
+        const fileInput = document.getElementById('pdfUpload');
+        if (fileInput) fileInput.click();
+      });
+    }
+
+    // update uploaded files select options
+    function updateUploadedFilesSelect() {
+      const sel = document.getElementById('uploadedFilesSelect');
+      if (!sel) return;
+      // clear and repopulate
+      sel.innerHTML = '<option value="">-- Select uploaded file --</option>';
+      uploadedFiles.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.serverName;
+        opt.text = `${f.clientName} (${Math.round(f.size / 1024)} KB)`;
+        sel.appendChild(opt);
+      });
+      // auto-select the last uploaded file
+      if (uploadedFiles.length) sel.value = uploadedFiles[uploadedFiles.length - 1].serverName;
+    }
+
+    // when user selects a different uploaded file from the dropdown
+    const uploadedFilesSelect = document.getElementById('uploadedFilesSelect');
+    if (uploadedFilesSelect) {
+      uploadedFilesSelect.addEventListener('change', function () {
+        const val = this.value;
+        if (!val) return;
+        const found = uploadedFiles.find(x => x.serverName === val);
+        if (!found) return;
+        uploadedFilename = found.serverName;
+        const nameEl = document.getElementById('uploadedName');
+        if (nameEl) nameEl.innerText = found.clientName;
+        loadPages(found.total_pages);
+        loadThumbnails(`${uploadsPreviewBase}${uploadedFilename}`, found.total_pages);
+        updateCompressInfo();
+      });
+    }
+
+    // Drag & drop support: enable dropping files onto the upload area.
+    // This sets the same file input files and calls uploadFile so behavior
+    // is consistent whether the user clicks or drops.
+    const uploadDrop = document.getElementById('uploadDrop');
+    uploadDrop.addEventListener('dragover', e => { e.preventDefault(); uploadDrop.classList.add('bg-red-100'); });
+    uploadDrop.addEventListener('dragleave', e => { uploadDrop.classList.remove('bg-red-100'); });
+    uploadDrop.addEventListener('drop', e => {
+      e.preventDefault(); uploadDrop.classList.remove('bg-red-100');
+      const files = Array.from(e.dataTransfer.files || []);
+      if (!files.length) return;
+      // mirror into the hidden input.files for compatibility, then upload sequentially
+      try {
+        document.getElementById('pdfUpload').files = e.dataTransfer.files;
+      } catch (e) {
+        // setting files may throw in some browsers; it's non-essential
+      }
+      (async function () {
+        for (const f of files) {
+          await uploadFile(f);
+        }
+      })();
+    });
+
+    // Select / Clear actions for the pages list
+    document.getElementById('selectAllBtn').addEventListener('click', () => {
+      document.querySelectorAll('.page-checkbox').forEach(cb => { cb.checked = true; cb.dispatchEvent(new Event('change')); });
+    });
+
+    document.getElementById('clearAllBtn').addEventListener('click', () => {
+      document.querySelectorAll('.page-checkbox').forEach(cb => { cb.checked = false; cb.dispatchEvent(new Event('change')); });
+    });
+
+    // getCheckedActions(): returns an array of enabled global actions
+    // from the sticky actions bar (compress/merge/split/remove/rotate)
+    function getCheckedActions() {
+      const actions = [];
+      // still read from hidden checkboxes (keeps server integration unchanged)
+      document.querySelectorAll('.action-checkbox:checked').forEach(node => actions.push(node.value));
+      return actions;
+    }
+
+    // Wire toolbox buttons to toggle hidden checkboxes
+    document.querySelectorAll('.tool-btn').forEach(btn => {
+      btn.addEventListener('click', function () {
+        const action = this.getAttribute('data-action');
+        if (!action) return;
+        const checkbox = Array.from(document.querySelectorAll('.action-checkbox')).find(n => n.value === action);
+        if (!checkbox) return;
+        checkbox.checked = !checkbox.checked;
+        // toggle active style
+        this.classList.toggle('bg-red-50');
+        this.classList.toggle('border-red-300');
+        updateCompressInfo();
+      });
+    });
+
+    function updateCompressInfo() {
+      const compressChecked = Array.from(document.querySelectorAll('.action-checkbox')).some(n => n.value === 'compress' && n.checked);
+      const info = document.getElementById('compressInfo');
+      const orig = document.getElementById('origSize');
+      const est = document.getElementById('estSize');
+      if (!info || !orig || !est) return;
+      if (!compressChecked) { info.classList.add('hidden'); return; }
+      // find active file
+      const active = uploadedFiles.find(x => x.serverName === uploadedFilename) || uploadedFiles[uploadedFiles.length - 1];
+      if (!active) { info.classList.add('hidden'); return; }
+      info.classList.remove('hidden');
+      orig.innerText = `${Math.round(active.size / 1024)} KB`;
+      // heuristic estimate: show 60% of original
+      const estimated = Math.round(active.size * 0.6 / 1024);
+      est.innerText = `${estimated} KB (~60%)`;
+    }
+
+    // parsePagesInput(str): helper to parse page range strings like
+    // "1,3,5-7" into an array of page numbers [1,3,5,6,7]. Used for
+    // rotate input and other range-entry features.
+    function parsePagesInput(str) {
+      if (!str) return [];
+      const out = new Set();
+      str.split(',').map(s => s.trim()).forEach(part => {
+        if (!part) return;
+        if (part.includes('-')) {
+          const [a, b] = part.split('-').map(x => parseInt(x, 10));
+          if (!Number.isNaN(a) && !Number.isNaN(b)) {
+            for (let i = Math.min(a, b); i <= Math.max(a, b); i++) out.add(i);
+          }
+        } else {
+          const n = parseInt(part, 10);
+          if (!Number.isNaN(n)) out.add(n);
+        }
+      });
+      return Array.from(out).sort((a, b) => a - b);
+    }
+
+    // showGeneratedFiles(listNames): render links for output files
+    // produced by server side processing (preview/download links).
+    function showGeneratedFiles(listNames) {
+      const list = document.getElementById('generatedList');
+      list.innerHTML = '';
+      (listNames || []).forEach(name => {
+        const li = document.createElement('div');
+        li.className = 'flex items-center justify-between p-2 border rounded-md bg-white';
+        li.innerHTML = `<span class="truncate max-w-xs">${name}</span>
+          <div class="space-x-2">
+            <a href='${generatedBase}${name}' target='_blank' class='text-red-600 text-sm'>Preview</a>
+            <a href='${generatedBase}${name}' class='text-green-600 text-sm' download>Download</a>
+          </div>`;
+        list.appendChild(li);
+      });
+    }
+
+    // applyRotationToPreview(page, angle): helper to visually rotate
+    // the thumbnail wrapper for `page` by `angle` degrees. This is a
+    // client-side-only preview; server must apply rotations to the PDF
+    // when generating final outputs.
+    function applyRotationToPreview(page, angle) {
+      const wrapper = document.getElementById(`thumb-p${page}`);
+      if (!wrapper) return;
+      wrapper.style.transform = `rotate(${angle}deg)`;
+      wrapper.style.transition = 'transform 240ms ease';
+    }
+
+    // Rotate selected pages button handler: applies angle to each
+    // selected page in the UI and updates the per-page rotation state.
+    document.getElementById('rotateSelectedBtn').addEventListener('click', () => {
+      if (!uploadedFilename) { alert('Please upload a PDF first'); return; }
+      const angle = parseInt(document.getElementById('rotateAngle').value || '90', 10);
+      if (selectedPages.length === 0) { alert('Select pages to rotate'); return; }
+      selectedPages.forEach(p => {
+        if (!pageRotations[p]) pageRotations[p] = 0;
+        pageRotations[p] = (pageRotations[p] + angle) % 360;
+        const angleEl = document.getElementById(`angle-${p}`);
+        if (angleEl) angleEl.innerText = pageRotations[p] + '°';
+        applyRotationToPreview(p, pageRotations[p]);
+      });
+    });
+
+    // launchConfetti(): small celebratory effect used when outputs are generated
+    function launchConfetti() {
+      const canvas = document.getElementById('confetti-canvas');
+      const ctx = canvas.getContext('2d');
+      function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+      resize(); window.addEventListener('resize', resize);
+
+      const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
+      const particles = [];
+      const count = 80;
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * -canvas.height * 0.5,
+          vx: (Math.random() - 0.5) * 6,
+          vy: Math.random() * 6 + 2,
+          size: Math.random() * 8 + 4,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rot: Math.random() * Math.PI
+        });
+      }
+
+      let t0 = performance.now();
+      function frame(now) {
+        const dt = (now - t0) / 1000; t0 = now;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.12; // gravity
+          p.rot += 0.1;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+          ctx.restore();
+        });
+        // stop and clear after ~2.6s
+        if (now - t0 > 2600) {
+          // nothing; continue until timeout below
+        }
+        requestAnimationFrame(frame);
+      }
+
+      // run for ~2.5s then clear
+      requestAnimationFrame(frame);
+      setTimeout(() => { ctx.clearRect(0, 0, canvas.width, canvas.height); }, 2600);
+    }
+
+    // Generate button: collect enabled actions, selected pages and
+    // rotations, then POST to `processUrl` for server-side processing.
+    // The server response should include a `generated` array with
+    // produced filenames which are shown in the UI.
+    document.getElementById('generateBtn').addEventListener('click', async () => {
+      const actions = getCheckedActions();
+      if (!uploadedFilename) { alert('Please upload a PDF first'); return; }
+      if (actions.length === 0) { alert('Select at least one action'); return; }
+
+      const rotatePagesInput = document.getElementById('rotatePagesInput').value;
+      const rotatePagesParsed = parsePagesInput(rotatePagesInput);
+
+      const rotations = {};
+      for (const [page, angle] of Object.entries(pageRotations)) {
+        rotations[String(page)] = angle;
+      }
+      if (rotatePagesParsed && rotatePagesParsed.length > 0) {
+        const globalAngle = parseInt(document.getElementById('rotateAngle').value || '90', 10);
+        rotatePagesParsed.forEach(page => {
+          const current = rotations[String(page)] || 0;
+          rotations[String(page)] = (current + globalAngle) % 360;
+        });
+      }
+
+      const payload = { filename: uploadedFilename, actions: actions, pages: selectedPages, rotations: rotations };
+
+      const resp = await fetch(processUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await resp.json();
+      showGeneratedFiles(data.generated || []);
+
+      // surprise: if generated files were produced, launch confetti
+      if (data.generated && data.generated.length > 0) {
+        try { launchConfetti(); } catch (e) { /* non-fatal */ }
+      }
+    });
+
+    // Export to Word: send selected pages to server to convert to Word
+    document.getElementById('pdfToWordBtn').addEventListener('click', async () => {
+      if (!uploadedFilename) { alert('Upload a PDF first'); return; }
+      if (selectedPages.length === 0) { alert('Select pages to export'); return; }
+      const resp = await fetch(pdfToWordUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: uploadedFilename, pages: selectedPages }) });
+      const data = await resp.json();
+      if (data.generated && data.generated.length) {
+        showGeneratedFiles((data.generated || []));
+        try { launchConfetti(); } catch (e) { }
+      } else { alert('Conversion failed'); }
+    });
+
+    // Export to Excel: send selected pages to server to convert to Excel
+    document.getElementById('pdfToExcelBtn').addEventListener('click', async () => {
+      if (!uploadedFilename) { alert('Upload a PDF first'); return; }
+      if (selectedPages.length === 0) { alert('Select pages to export'); return; }
+      const resp = await fetch(pdfToExcelUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: uploadedFilename, pages: selectedPages }) });
+      const data = await resp.json();
+      if (data.generated && data.generated.length) {
+        showGeneratedFiles((data.generated || []));
+        try { launchConfetti(); } catch (e) { }
+      } else { alert('Conversion failed'); }
+    });
+  </script>
+</body>
+
+</html>
