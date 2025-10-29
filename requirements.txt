@@ -1,0 +1,11 @@
+# Shared Python dependencies for all projects
+Flask
+Werkzeug
+PyPDF2
+Pillow
+python-docx
+openpyxl
+pikepdf
+pdfplumber
+pandas
+PyMuPDF

@@ -1,0 +1,47 @@
+{#
+  Excel component partial (Jinja-friendly).
+  Usage: {% include 'components/excel/excel.html' %}
+  This is a lightweight skeleton intended to be enhanced by `components/excel/excel.js`.
+#}
+<section id="excel-component" class="mx-auto max-w-3xl bg-white p-6 rounded shadow">
+  <h2 class="text-xl font-semibold mb-4">Excel Comparison Tool</h2>
+
+  <form id="excelForm" method="POST" enctype="multipart/form-data" action="{{ url_for('excel.compare') }}">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label for="file1" class="block text-sm font-medium text-gray-700">Upload File 1</label>
+        <input id="file1" name="file1" type="file" accept=".xlsx,.xls,.csv" required class="mt-1 block w-full rounded-md border-gray-300"/>
+      </div>
+      <div>
+        <label for="file2" class="block text-sm font-medium text-gray-700">Upload File 2</label>
+        <input id="file2" name="file2" type="file" accept=".xlsx,.xls,.csv" required class="mt-1 block w-full rounded-md border-gray-300"/>
+      </div>
+    </div>
+
+    <div id="status" role="status" aria-live="polite" class="mt-4 text-sm text-gray-600"></div>
+
+    {# Columns section: populated either by server (Jinja) or by JS #}
+    <div id="columns-section" class="hidden mt-4">
+      <fieldset class="mb-3">
+        <legend class="font-medium text-gray-700">Select Merge Columns</legend>
+        <div id="merge-columns" class="flex flex-wrap gap-2 mt-2"></div>
+        <div class="mt-2"><button type="button" class="text-sm text-indigo-600" data-action="merge-select-all">Select all</button></div>
+      </fieldset>
+
+      <fieldset class="mb-3">
+        <legend class="font-medium text-gray-700">Select Compare Columns</legend>
+        <div id="compare-columns" class="flex flex-wrap gap-2 mt-2"></div>
+        <div class="mt-2"><button type="button" class="text-sm text-indigo-600" data-action="compare-select-all">Select all</button></div>
+      </fieldset>
+    </div>
+
+    <input type="hidden" name="upload_id" id="upload_id" value="{{ upload_id or '' }}">
+
+    <div class="mt-4 flex justify-end gap-2">
+      <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded">Compare</button>
+      <button type="reset" class="px-4 py-2 border rounded">Reset</button>
+    </div>
+  </form>
+
+  <noscript class="mt-4 text-sm text-gray-700">This tool works without JavaScript, but the UI will be less interactive.</noscript>
+</section>

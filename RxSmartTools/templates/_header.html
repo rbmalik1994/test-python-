@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}RX Tools{% endblock %}</title>
+  <!-- Tailwind via CDN for quick development; replace with build for production -->
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="bg-gray-100 text-gray-800">
+  <div class="container mx-auto p-6">
+    <header class="mb-6">
+      <h1 class="text-2xl font-bold">{% block header_title %}RX PDF Tools{% endblock %}</h1>
+    </header>
+    {% block content_start %}{% endblock %}
