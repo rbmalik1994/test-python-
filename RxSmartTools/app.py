@@ -8,12 +8,25 @@ from pathlib import Path
 
 from flask import Flask
 
-from .config import Config
-from .routes import register_blueprints
-from .services.file_service import prepare_runtime_directories
+# Prefer relative imports when the package is used as a module, but allow
+# running the file directly (python RxSmartTools/app.py) by falling back to
+# absolute imports after ensuring the parent directory is on sys.path.
+try:
+    from .config import Config
+    from .routes import register_blueprints
+    from .services.file_service import prepare_runtime_directories
+except ImportError:
+    # Running as a script: add project root to sys.path and import by package name
+    import sys
+    from pathlib import Path as _Path
 
+    sys.path.append(str(_Path(__file__).resolve().parent.parent))
+    from RxSmartTools.config import Config
+    from RxSmartTools.routes import register_blueprints
+    from RxSmartTools.services.file_service import prepare_runtime_directories
+
+logging.basicConfig(level=logging.DEBUG)
 LOGGER = logging.getLogger(__name__)
-
 
 def create_app() -> Flask:
     """Create and configure the Flask application."""
@@ -47,6 +60,6 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5001))
-    LOGGER.info("Starting development server on port %s", port)
-    app.run(debug=True, port=port)
+    # port = int(os.environ.get("PORT", 5001))
+    # LOGGER.info("Starting development server on port %s", port)
+    app.run(debug=True)
