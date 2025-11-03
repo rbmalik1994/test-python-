@@ -70,6 +70,102 @@ def merge_pages(
         writer.write(handle)
 
 
+def merge_files(
+    input_paths: Sequence[Path], output_path: Path, progress_callback=None, cancel_check=None
+) -> None:
+    """Merge whole input files into a single PDF stored at ``output_path``.
+
+    - input_paths: sequence of Paths to source PDFs (order preserved)
+    - progress_callback: optional callable(msg: str) for reporting progress
+    - cancel_check: optional callable() -> bool; if returns True, raise RuntimeError to cancel
+    """
+    writer = PdfWriter()
+    first_meta = None
+    for idx, p in enumerate(input_paths, start=1):
+        if cancel_check and cancel_check():
+            raise RuntimeError("Merge cancelled")
+        if progress_callback:
+            progress_callback(f"Merging file {idx}/{len(input_paths)}: {p.name}")
+        reader = PdfReader(p)
+        # preserve metadata from first document when available
+        if first_meta is None:
+            try:
+                first_meta = reader.metadata
+            except Exception:
+                first_meta = None
+        for page in reader.pages:
+            writer.add_page(page)
+
+    if first_meta:
+        try:
+            writer.add_metadata(first_meta)
+        except Exception:
+            LOGGER.exception("Failed to add metadata to merged output")
+
+    with output_path.open("wb") as handle:
+        writer.write(handle)
+
+    # quick sanity-check of output
+    try:
+        out_reader = PdfReader(output_path)
+        if len(out_reader.pages) == 0:
+            raise RuntimeError("Merged output has no pages")
+    except Exception:
+        LOGGER.exception("Validation of merged output failed")
+        raise
+
+
+def merge_selected_pages_from_multiple_files(
+    file_page_map: dict[Path, Sequence[int]],
+    output_path: Path,
+    progress_callback=None,
+    cancel_check=None,
+) -> None:
+    """Create a single merged PDF from selected pages across multiple files.
+
+    file_page_map: mapping of Path -> iterable of 1-based page numbers
+    """
+    writer = PdfWriter()
+    first_meta = None
+    total_files = len(file_page_map)
+    for idx, (p, pages) in enumerate(file_page_map.items(), start=1):
+        if cancel_check and cancel_check():
+            raise RuntimeError("Merge cancelled")
+        if progress_callback:
+            progress_callback(f"Processing {idx}/{total_files}: {p.name}")
+        reader = PdfReader(p)
+        if first_meta is None:
+            try:
+                first_meta = reader.metadata
+            except Exception:
+                first_meta = None
+
+        # validate pages
+        for number in pages:
+            index = int(number) - 1
+            if not (0 <= index < len(reader.pages)):
+                raise ValueError(f"Invalid page {number} for file {p.name}")
+            writer.add_page(reader.pages[index])
+
+    if first_meta:
+        try:
+            writer.add_metadata(first_meta)
+        except Exception:
+            LOGGER.exception("Failed to add metadata to merged output")
+
+    with output_path.open("wb") as handle:
+        writer.write(handle)
+
+    # validate
+    try:
+        out_reader = PdfReader(output_path)
+        if len(out_reader.pages) == 0:
+            raise RuntimeError("Merged output has no pages")
+    except Exception:
+        LOGGER.exception("Validation of merged output failed")
+        raise
+
+
 def split_pdf(input_path: Path, destination_dir: Path) -> list[Path]:
     """Split ``input_path`` into individual pages stored under ``destination_dir``."""
 

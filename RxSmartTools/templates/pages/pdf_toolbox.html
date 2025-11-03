@@ -172,7 +172,12 @@
               <button id="clearFileBtn" type="button"
                 class="absolute top-2 right-2 text-xs px-2 py-1 bg-white border rounded-md text-gray-600 hover:bg-gray-50"
                 aria-label="Clear uploaded file"
-                onclick="(function(){ try{ const f = document.getElementById('pdfUpload'); if(f) f.value=''; const filename = window.uploadedFilename || ''; if(filename && typeof uploadUrl !== 'undefined'){ try{ fetch(uploadUrl, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }) }).catch(()=>{}); }catch(e){} } window.uploadedFilename=''; window.uploadedFiles = []; if(typeof updateUploadedFilesSelect==='function') updateUploadedFilesSelect(); const explorerList = document.getElementById('uploadedFilesExplorerList'); if(explorerList) explorerList.innerHTML = '<div class=\'text-xs text-gray-400 italic\'>No uploaded files yet.</div>'; const filesCount = document.getElementById('uploadedFilesCount'); if(filesCount) filesCount.innerText = '0'; const sel = document.getElementById('uploadedFilesSelect'); if(sel) sel.innerHTML = '<option value=\'\'>-- Select uploaded file --</option>'; const toggle = document.getElementById('explorerToggle'); if(toggle){ toggle.innerText = '−'; toggle.setAttribute('aria-expanded', 'true'); } const thumbs = document.getElementById('thumbs'); if(thumbs) thumbs.innerHTML=''; const pages = document.getElementById('pagesList'); if(pages) pages.innerHTML=''; const gen = document.getElementById('generatedList'); if(gen) gen.innerHTML=''; window.pageRotations = {}; window.selectedPages = []; document.querySelectorAll('.action-checkbox').forEach(n=>n.checked=false); document.querySelectorAll('.tool-btn').forEach(b=>{ b.classList.remove('bg-red-50','border-red-300'); }); }catch(e){} })();">
+                try { openTabs.slice().forEach(s => { const n=document.getElementById('tab-'+s); if(n) n.remove(); }); openTabs.length=0; activeTab = null; perFileState && Object.keys(perFileState).forEach(k=>{ try{ localStorage.removeItem('rx_pdf_state_'+k); }catch(e){} }); for(const k in perFileState) delete perFileState[k]; const previewContents = document.getElementById('previewContents'); if(previewContents) previewContents.innerHTML=''; const pages = document.getElementById('pagesList'); if(pages) pages.innerHTML=''; const gen = document.getElementById('generatedList'); if(gen) gen.innerHTML=''; document.querySelectorAll('.action-checkbox').forEach(n=>n.checked=false); document.querySelectorAll('.tool-btn').forEach(b=>{ b.classList.remove('bg-red-50','border-red-300'); }); }catch(e){} })();">
+                onclick="(function(){ try{ const f = document.getElementById('pdfUpload'); if(f) f.value=''; const filename = window.uploadedFilename || ''; if(filename && typeof uploadUrl !== 'undefined'){ try{ fetch(uploadUrl, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }) }).catch(()=>{}); }catch(e){} } window.uploadedFilename=''; window.uploadedFiles = []; if(typeof updateUploadedFilesSelect==='function') updateUploadedFilesSelect(); const explorerList = document.getElementById('uploadedFilesExplorerList'); if(explorerList) explorerList.innerHTML = '<div class=\'text-xs text-gray-400 italic\'>No uploaded files yet.</div>'; const filesCount = document.getElementById('uploadedFilesCount'); if(filesCount) filesCount.innerText = '0'; const sel = document.getElementById('uploadedFilesSelect'); if(sel) sel.innerHTML = '<option value=\'\'>-- Select uploaded file --</option>'; const toggle = document.getElementById('explorerToggle'); if(toggle){ toggle.innerText = '−'; toggle.setAttribute('aria-expanded', 'true'); } // clear preview tabs and per-file state
+                try { openTabs.slice().forEach(s => { const n=document.getElementById('tab-'+s); if(n) n.remove(); }); } catch(e) {}
+                openTabs.length=0; activeTab = null;
+                try { Object.keys(perFileState).forEach(k=>{ try{ localStorage.removeItem('rx_pdf_state_'+k); }catch(e){} delete perFileState[k]; }); } catch(e) {}
+                const previewContents = document.getElementById('previewContents'); if(previewContents) previewContents.innerHTML=''; const pages = document.getElementById('pagesList'); if(pages) pages.innerHTML=''; const gen = document.getElementById('generatedList'); if(gen) gen.innerHTML=''; document.querySelectorAll('.action-checkbox').forEach(n=>n.checked=false); document.querySelectorAll('.tool-btn').forEach(b=>{ b.classList.remove('bg-red-50','border-red-300'); }); }catch(e){} })();">
                 Clear
               </button>
 
@@ -283,7 +288,7 @@
       <!-- Smart tool area -->
       <!-- Inline toggle-group toolbox: placed under the Smart PDF Toolbox header and above the pages section.
         Keeps same hidden checkboxes and IDs so existing JS logic remains unchanged. -->
-      <div id="inlineToolGroupContainer" class="mt-4">
+  <div id="inlineToolGroupContainer" class="mt-4">
         <div id="inlineToolGroup" role="toolbar" aria-label="PDF Actions"
           class="flex items-center gap-2 flex-nowrap whitespace-nowrap">
           <!-- hidden checkboxes (server logic unchanged) -->
@@ -580,7 +585,8 @@
                 btn.focus();
               });
 
-              radios.forEach(r => r.addEventListener('change', refreshButtonUI));
+              // wire select change to refresh UI
+              if (sel) sel.addEventListener('change', refreshButtonUI);
 
               refreshButtonUI();
               if (chk) chk.addEventListener('change', refreshButtonUI);
@@ -640,8 +646,10 @@
               class="px-3 py-2 bg-red-100 text-red-700 rounded-md border text-sm">Rotate Selected</button>
           </div>
 
+          <!-- original inline Generate moved to the right column; keep a hidden placeholder so existing JS that
+               references `generateBtn` continues to work if needed. -->
           <div class="ml-2">
-            <button id="generateBtn" type="button"
+            <button id="generateBtnPlaceholder" type="button" style="display:none"
               class="px-4 py-2 bg-red-600 text-white rounded-md shadow text-sm">Generate</button>
           </div>
         </div>
@@ -692,11 +700,11 @@
         <!-- Left column: Pages list and per-page controls -->
         <section class="md:col-span-3 bg-white rounded-lg p-4 shadow-sm">
           <div class="flex items-center justify-between mb-3">
-            <h3 class="font-semibold">Pages</h3>
+            <h3 class="font-semibold">Files</h3>
             <div class="space-x-2">
-              <button id="selectAllBtn"
+              <button id="selectAllBtnFiles"
                 class="inline-flex items-center px-2 py-1 text-sm bg-red-600 text-white rounded-md">Select All</button>
-              <button id="clearAllBtn"
+              <button id="clearAllBtnFiles"
                 class="inline-flex items-center px-2 py-1 text-sm bg-gray-100 rounded-md text-gray-700">Clear</button>
             </div>
           </div>
@@ -710,7 +718,7 @@
                   <svg class="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
                   </svg>
-                  <span class="font-medium text-sm">Uploaded Files</span>
+                  <span class="font-medium text-sm">File List</span>
                   <span id="uploadedFilesCount" class="ml-2 text-xs text-gray-500">0</span>
                 </div>
 
@@ -721,124 +729,25 @@
               </div>
 
               <div id="uploadedFilesExplorerList" class="mt-2 space-y-1 max-h-40 overflow-auto">
-                <!-- items rendered dynamically from the (hidden) select below -->
                 <div class="text-xs text-gray-400 italic">No uploaded files yet.</div>
               </div>
 
               <div class="mt-2 text-xs text-gray-500">Tip: click "Open" to load a file into the workspace; use the
                 checkbox to mark it for batch operations.</div>
 
-              <!-- Hidden legacy select (kept for existing JS compatibility). The visible explorer mirrors this. -->
+              <!-- Hidden legacy select (kept for compatibility). The visible explorer mirrors this. -->
               <select id="uploadedFilesSelect" class="hidden" aria-hidden="true">
                 <option value="">-- Select uploaded file --</option>
               </select>
-
-              <script>
-                // Render/bridge code that mirrors options in the hidden select into a VS Code-style explorer.
-                document.addEventListener('DOMContentLoaded', () => {
-                  const sel = document.getElementById('uploadedFilesSelect');
-                  const list = document.getElementById('uploadedFilesExplorerList');
-                  const toggle = document.getElementById('explorerToggle');
-                  const count = document.getElementById('uploadedFilesCount');
-
-                  function makeItem(opt) {
-                    const serverName = opt.value;
-                    if (!serverName) return null;
-                    // try to find richer metadata from global uploadedFiles (populated by main script)
-                    const meta = (window.uploadedFiles || []).find(f => f.serverName === serverName) || {};
-                    const label = meta.clientName || opt.text || serverName;
-
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'flex items-center justify-between p-2 rounded hover:bg-gray-50';
-                    wrapper.innerHTML = `
-                      <div class="flex items-center space-x-2">
-                        <input type="checkbox" class="explorer-file-checkbox" data-server="${serverName}" aria-label="Select ${label}" />
-                        <div class="flex flex-col">
-                          <span class="text-sm truncate" style="max-width:200px">${label}</span>
-                          <span class="text-xs text-gray-400">${meta.total_pages ? meta.total_pages + ' pages' : ''} ${meta.size ? '(' + Math.round(meta.size / 1024) + ' KB)' : ''}</span>
-                        </div>
-                      </div>
-                      <div class="flex items-center space-x-2">
-                        <button class="open-file-btn text-xs px-2 py-1 bg-white border rounded text-gray-600" data-server="${serverName}">Open</button>
-                        <button class="preview-file-btn text-xs px-2 py-1 bg-white border rounded text-gray-600" data-server="${serverName}">Preview</button>
-                      </div>
-                    `;
-                    return wrapper;
-                  }
-
-                  function render() {
-                    // clear and rebuild from select options (keeps single source of truth)
-                    list.innerHTML = '';
-                    const opts = Array.from(sel.options || []).filter(o => o.value);
-                    if (!opts.length) {
-                      list.innerHTML = '<div class="text-xs text-gray-400 italic">No uploaded files yet.</div>';
-                      count.innerText = '0';
-                      return;
-                    }
-                    opts.forEach(o => {
-                      const item = makeItem(o);
-                      if (item) list.appendChild(item);
-                    });
-                    count.innerText = String(opts.length);
-                  }
-
-                  // observe changes to the hidden select (updateUploadedFilesSelect writes here)
-                  const mo = new MutationObserver(render);
-                  mo.observe(sel, { childList: true, subtree: false });
-
-                  // also run once on load
-                  render();
-
-                  // toggle collapse
-                  toggle.addEventListener('click', () => {
-                    const hidden = list.classList.toggle('hidden');
-                    toggle.innerText = hidden ? '+' : '−';
-                    toggle.setAttribute('aria-expanded', String(!hidden));
-                  });
-
-                  // delegate clicks inside the explorer list
-                  list.addEventListener('click', (ev) => {
-                    const openBtn = ev.target.closest('.open-file-btn');
-                    if (openBtn) {
-                      const server = openBtn.getAttribute('data-server');
-                      if (server) {
-                        // set hidden select value to trigger existing change handler
-                        sel.value = server;
-                        sel.dispatchEvent(new Event('change', { bubbles: true }));
-                      }
-                      return;
-                    }
-                    const previewBtn = ev.target.closest('.preview-file-btn');
-                    if (previewBtn) {
-                      const server = previewBtn.getAttribute('data-server');
-                      if (server) {
-                        // try to find metadata to know pages; fallback to last-known uploadedFiles entry
-                        const meta = (window.uploadedFiles || []).find(f => f.serverName === server);
-                        const pages = (meta && meta.total_pages) || meta && meta.total_pages || 1;
-                        try {
-                          // call existing loader functions if available
-                          if (typeof loadThumbnails === 'function') {
-                            loadThumbnails((typeof uploadsPreviewBase !== 'undefined' ? uploadsPreviewBase : '') + server, pages);
-                          }
-                          if (typeof loadPages === 'function' && meta && meta.total_pages) {
-                            loadPages(meta.total_pages);
-                            // mark as active filename
-                            window.uploadedFilename = server;
-                            const nameEl = document.getElementById('uploadedName');
-                            if (nameEl && meta.clientName) nameEl.innerText = meta.clientName;
-                          }
-                        } catch (e) { /* non-fatal */ }
-                      }
-                      return;
-                    }
-                    const checkbox = ev.target.closest('.explorer-file-checkbox');
-                    if (checkbox) {
-                      // delegate: toggling these checkboxes is purely UI for batch selection.
-                      // You can read selected servers via document.querySelectorAll('.explorer-file-checkbox:checked')
-                    }
-                  });
-                });
-              </script>
+            </div>
+          </div>
+           <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold">Pages</h3>
+            <div class="space-x-2">
+              <button id="selectAllBtn"
+                class="inline-flex items-center px-2 py-1 text-sm bg-red-600 text-white rounded-md">Select All</button>
+              <button id="clearAllBtn"
+                class="inline-flex items-center px-2 py-1 text-sm bg-gray-100 rounded-md text-gray-700">Clear</button>
             </div>
           </div>
           <div id="pagesList" class="border border-gray-200 rounded-md p-2 h-64 overflow-auto bg-gray-50"></div>
@@ -850,14 +759,35 @@
 
             <div class="text-sm text-gray-500">Preview Thumbnails</div>
           </div>
-          <div id="thumbs"
-            class="rounded-md border border-gray-100 p-2 h-80 overflow-auto bg-white grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <!-- Selected file/pages info banner -->
+          <!-- Preview tabs: show open previews as browser-style tabs. -->
+          <div id="previewTabsWrapper" class="mb-3">
+            <div id="previewTabs" class="flex items-center space-x-1 overflow-auto" role="tablist" aria-label="Open previews">
+              <!-- tabs inserted here -->
+            </div>
+            <div id="selectedInfo" class="mt-2 p-3 border rounded-md bg-gray-50 text-sm text-gray-700">
+              <div><strong>Selected file:</strong> <span id="selectedFilename">None</span></div>
+              <div class="mt-1"><strong>Selected pages:</strong> <span id="selectedPagesInfo">None</span></div>
+            </div>
+          </div>
+
+           
+
+          <div id="pagePreviewSection">
+            <h4 class="text-sm font-medium text-gray-700 mb-2">Page Preview</h4>
+            <!-- tabbed preview contents: each open preview gets its own thumbs container -->
+            <div id="previewContents" class="rounded-md border border-gray-100 p-2 h-80 overflow-auto bg-white">
+              <!-- per-tab thumbs will be added here as children -->
+            </div>
           </div>
         </section>
 
         <!-- Right column: Generated files list and action controls (export, rotate input) -->
         <section class="md:col-span-3 bg-white rounded-lg p-4 shadow-sm">
           <h3 class="font-semibold mb-3">Generated / Actions</h3>
+          <div class="mb-3">
+            <button id="generateBtn" type="button" class="w-full inline-flex justify-center items-center px-3 py-2 bg-red-600 text-white rounded-md text-sm mb-2">Generate</button>
+          </div>
           <ul id="generatedList" class="space-y-2 text-sm"></ul>
 
           <div id="compressInfo" class="mt-3 text-sm text-gray-600 hidden">
@@ -901,10 +831,40 @@
     const uploadsPreviewBase = "{{ url_for('pdf.serve_upload', filename='') }}";
     const generatedBase = "{{ url_for('pdf.serve_generated', filename='') }}";
 
+    // Global state
     let uploadedFilename = '';
-    let selectedPages = [];
-    let pageRotations = {};
+    // per-file in-memory state (also persisted to localStorage)
+    // shape: { [serverName]: { selectedPages: [], rotations: {page: angle}, total_pages: n, clientName, size } }
+    const perFileState = {};
     let uploadedFiles = []; // { clientName, size, serverName, total_pages }
+
+    // Preview tabs state
+    const openTabs = []; // ordered serverName list
+    let activeTab = null;
+
+    // utility: debounce
+    function debounce(fn, wait) {
+      let t = null;
+      return function (...args) {
+        if (t) clearTimeout(t);
+        t = setTimeout(() => { t = null; fn.apply(this, args); }, wait);
+      };
+    }
+
+    // localStorage helpers
+    function storageKeyFor(serverName) { return `rx_pdf_state_${serverName}`; }
+    function savePerFileState(serverName) {
+      if (!serverName || !perFileState[serverName]) return;
+      try { localStorage.setItem(storageKeyFor(serverName), JSON.stringify(perFileState[serverName])); } catch (e) {}
+    }
+    function loadPerFileState(serverName) {
+      if (!serverName) return null;
+      try {
+        const raw = localStorage.getItem(storageKeyFor(serverName));
+        if (raw) return JSON.parse(raw);
+      } catch (e) {}
+      return null;
+    }
 
     // uploadFile(file): send the PDF file to the server via `uploadUrl`.
     // On success the server should return { filename, total_pages } which
@@ -921,13 +881,18 @@
         uploadedFilename = data.filename;
         // update uploaded files registry and UI
         uploadedFiles.push(fileObj);
+
+        // initialize per-file state (load persisted if present)
+        const existing = loadPerFileState(data.filename) || { selectedPages: [], rotations: {} };
+        perFileState[data.filename] = Object.assign({ total_pages: data.total_pages, clientName: file.name, size: file.size }, existing);
+        savePerFileState(data.filename);
+
         updateUploadedFilesSelect();
         // show last uploaded name in the upload area
         const nameEl = document.getElementById('uploadedName');
         if (nameEl) nameEl.innerText = fileObj.clientName;
-        // load pages and thumbnails for the active file
-        loadPages(data.total_pages);
-        loadThumbnails(`${uploadsPreviewBase}${uploadedFilename}`, data.total_pages);
+        // open preview tab for the newly uploaded file
+        openPreviewTab(data.filename);
       } else {
         alert('Upload failed');
       }
@@ -957,39 +922,61 @@
     // loadPages(total): populate the left-side pages list with rows
     // for each page (1..total). Also attaches event handlers for
     // checkbox changes, per-page rotate and per-page remove actions.
-    function loadPages(total) {
+    // loadPages(serverName): populate pages list for a specific file (serverName)
+    function loadPages(total, serverName) {
       const container = document.getElementById('pagesList');
       container.innerHTML = '';
-      selectedPages = [];
-      pageRotations = {};
+      if (!serverName) serverName = uploadedFilename;
+      if (!serverName) return;
+      // ensure per-file state exists
+      if (!perFileState[serverName]) perFileState[serverName] = { selectedPages: [], rotations: {}, total_pages: total };
+      perFileState[serverName].total_pages = total;
+
+      const selPages = new Set(perFileState[serverName].selectedPages || []);
+      const rotations = perFileState[serverName].rotations || {};
+
       for (let i = 1; i <= total; i++) {
         const row = makePageRow(i);
+        // set checkbox state from per-file selections
+        const cb = row.querySelector('.page-checkbox');
+        if (cb) cb.checked = selPages.has(i);
+        // set angle display from per-file rotations
+        const angleEl = row.querySelector(`#angle-${i}`) || row.querySelector('.angle-display');
+        if (angleEl) angleEl.innerText = (rotations[i] || 0) + '°';
         container.appendChild(row);
       }
 
+      // handlers: when user toggles page checkbox update perFileState and persist
       document.querySelectorAll('.page-checkbox').forEach(cb => {
         cb.addEventListener('change', function () {
           const val = parseInt(this.value, 10);
+          const st = perFileState[serverName] || (perFileState[serverName] = { selectedPages: [], rotations: {} });
           if (this.checked) {
-            if (!selectedPages.includes(val)) selectedPages.push(val);
+            if (!st.selectedPages.includes(val)) st.selectedPages.push(val);
           } else {
-            selectedPages = selectedPages.filter(x => x !== val);
+            st.selectedPages = st.selectedPages.filter(x => x !== val);
           }
+          savePerFileState(serverName);
+          try { if (typeof refreshSelectedInfo === 'function') refreshSelectedInfo(); } catch (e) {}
         });
       });
 
+      // wire rotate buttons (update per-file rotations and preview)
       document.querySelectorAll('.rotate-btn').forEach(btn => {
         btn.addEventListener('click', function () {
           const p = parseInt(this.getAttribute('data-page'), 10);
-          if (!pageRotations[p]) pageRotations[p] = 0;
-          pageRotations[p] = (pageRotations[p] + 90) % 360;
-          document.getElementById(`angle-${p}`).innerText = pageRotations[p] + '°';
+          const st = perFileState[serverName] || (perFileState[serverName] = { selectedPages: [], rotations: {} });
+          if (!st.rotations[p]) st.rotations[p] = 0;
+          st.rotations[p] = (st.rotations[p] + 90) % 360;
+          const angleEl = document.getElementById(`angle-${p}`);
+          if (angleEl) angleEl.innerText = st.rotations[p] + '°';
           // update thumbnail preview immediately
-          const thumb = document.getElementById(`thumb-p${p}`);
+          const thumb = document.getElementById(`thumb-${serverName}-p${p}`);
           if (thumb) {
-            thumb.style.transform = `rotate(${pageRotations[p]}deg)`;
+            thumb.style.transform = `rotate(${st.rotations[p]}deg)`;
             thumb.style.transition = 'transform 240ms ease';
           }
+          savePerFileState(serverName);
         });
       });
 
@@ -1001,27 +988,64 @@
           const row = this.closest('div');
           if (row) row.remove();
           // remove thumbnail
-          const thumb = document.getElementById(`thumb-p${p}`);
+          const thumb = document.getElementById(`thumb-${serverName}-p${p}`);
           if (thumb) thumb.remove();
           // cleanup selection and rotations
-          selectedPages = selectedPages.filter(x => x !== p);
-          delete pageRotations[p];
+          const st = perFileState[serverName] || (perFileState[serverName] = { selectedPages: [], rotations: {} });
+          st.selectedPages = st.selectedPages.filter(x => x !== p);
+          delete st.rotations[p];
+          savePerFileState(serverName);
           const angleEl = document.getElementById(`angle-${p}`);
           if (angleEl) angleEl.innerText = 'removed';
+          try { if (typeof refreshSelectedInfo === 'function') refreshSelectedInfo(); } catch (e) {}
         });
       });
+
+      // refresh banner after pages load
+      try { if (typeof refreshSelectedInfo === 'function') refreshSelectedInfo(); } catch (e) {}
     }
 
     // loadThumbnails(url, total): use PDF.js to render thumbnails for
     // each page from the uploaded PDF URL. Each thumbnail wrapper is
     // given an id `thumb-p{n}` so the UI can rotate or remove it.
-    async function loadThumbnails(url, total) {
+    // loadThumbnails(url, total, serverName): render thumbnails into a per-tab container
+    async function loadThumbnails(url, total, serverName) {
+      if (!serverName) serverName = uploadedFilename;
+      if (!serverName) return;
       try {
+        // create tab content container if missing
+        const previewContents = document.getElementById('previewContents');
+        let tabNode = document.getElementById(`tab-${serverName}`);
+        if (!tabNode) {
+          tabNode = document.createElement('div');
+          tabNode.id = `tab-${serverName}`;
+          tabNode.className = 'tab-content hidden';
+          const thumbs = document.createElement('div');
+          thumbs.id = `thumbs-${serverName}`;
+          thumbs.className = 'rounded-md grid grid-cols-2 sm:grid-cols-3 gap-3';
+          tabNode.appendChild(thumbs);
+          previewContents.appendChild(tabNode);
+        }
+
+        // cancel previous load if any
+        const token = Symbol('load');
+        perFileState[serverName].loadToken = token;
+
         const pdf = await pdfjsLib.getDocument(url).promise;
-        const thumbs = document.getElementById('thumbs');
-        thumbs.innerHTML = '';
+        // if cancelled, abort
+        if (perFileState[serverName].loadToken !== token) return;
+
+        const thumbsEl = document.getElementById(`thumbs-${serverName}`);
+        if (!thumbsEl) return;
+        thumbsEl.innerHTML = '';
+
+        const seen = new Set();
         for (let i = 1; i <= total; i++) {
+          if (seen.has(i)) continue; // safety dedupe
+          seen.add(i);
           const page = await pdf.getPage(i);
+          // cancel check
+          if (perFileState[serverName].loadToken !== token) return;
           const viewport = page.getViewport({ scale: 0.7 });
           const canvas = document.createElement('canvas');
           canvas.width = viewport.width;
@@ -1029,10 +1053,9 @@
           await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
           const wrapper = document.createElement('div');
           wrapper.className = 'thumb-wrapper bg-gray-50 p-1 rounded-md flex items-center justify-center';
-          wrapper.id = `thumb-p${i}`;
+          wrapper.id = `thumb-${serverName}-p${i}`;
           wrapper.dataset.page = i;
-          // make canvas id for targeted transforms
-          canvas.id = `canvas-p${i}`;
+          canvas.id = `canvas-${serverName}-p${i}`;
           canvas.style.display = 'block';
           canvas.style.maxWidth = '100%';
           canvas.style.height = 'auto';
@@ -1046,11 +1069,103 @@
           container.className = 'flex flex-col items-center';
           container.appendChild(wrapper);
           container.appendChild(label);
-          thumbs.appendChild(container);
+          thumbsEl.appendChild(container);
+
+          // apply stored rotation if present
+          const st = perFileState[serverName] || {};
+          if (st.rotations && st.rotations[i]) {
+            wrapper.style.transform = `rotate(${st.rotations[i]}deg)`;
+          }
         }
       } catch (err) {
         console.warn('thumbnail load failed', err);
       }
+    }
+
+    // Tab management
+    function updateTabsUI() {
+      const tabs = document.getElementById('previewTabs');
+      tabs.innerHTML = '';
+      openTabs.forEach((srv, idx) => {
+        const tbtn = document.createElement('button');
+        tbtn.className = 'px-3 py-1 rounded-t-md bg-white border text-sm flex items-center space-x-2';
+        tbtn.setAttribute('role', 'tab');
+        tbtn.setAttribute('aria-selected', String(activeTab === srv));
+        tbtn.tabIndex = 0;
+        tbtn.innerHTML = `<span class="truncate max-w-[10rem]">${(perFileState[srv] && perFileState[srv].clientName) || srv}</span>`;
+        if (activeTab === srv) tbtn.classList.add('font-semibold');
+        tbtn.addEventListener('click', () => switchTab(srv));
+        // keyboard: left/right and close via Delete/Escape
+        tbtn.addEventListener('keydown', (ev) => {
+          if (ev.key === 'ArrowLeft') { const i = openTabs.indexOf(srv); if (i>0) switchTab(openTabs[i-1]); }
+          if (ev.key === 'ArrowRight') { const i = openTabs.indexOf(srv); if (i < openTabs.length-1) switchTab(openTabs[i+1]); }
+          if (ev.key === 'Delete' || ev.key === 'Escape') { closeTab(srv); }
+        });
+
+        // close icon
+        const close = document.createElement('button');
+        close.className = 'ml-2 p-1 rounded hover:bg-gray-100';
+        close.setAttribute('aria-label', `Close ${srv}`);
+        close.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+        close.addEventListener('click', (ev) => { ev.stopPropagation(); closeTab(srv); });
+        tbtn.appendChild(close);
+        tabs.appendChild(tbtn);
+      });
+    }
+
+    function switchTab(serverName) {
+      if (!serverName) return;
+      activeTab = serverName;
+      // show corresponding tab content
+      document.querySelectorAll('#previewContents .tab-content').forEach(n => n.classList.add('hidden'));
+      const node = document.getElementById(`tab-${serverName}`);
+      if (node) node.classList.remove('hidden');
+      // update selected filename and pages list to this file
+      uploadedFilename = serverName;
+      const meta = uploadedFiles.find(x => x.serverName === serverName) || perFileState[serverName] || {};
+      const nameEl = document.getElementById('selectedFilename'); if (nameEl) nameEl.innerText = meta.clientName || serverName;
+      // load pages into left column using state
+      const total = (meta && meta.total_pages) || (perFileState[serverName] && perFileState[serverName].total_pages) || 1;
+      loadPages(total, serverName);
+      updateTabsUI();
+    }
+
+    function openPreviewTab(serverName) {
+      if (!serverName) return;
+      // if tab already open, focus it
+      if (!openTabs.includes(serverName)) openTabs.push(serverName);
+      // ensure perFileState initialized
+      const meta = uploadedFiles.find(x => x.serverName === serverName) || {};
+      if (!perFileState[serverName]) perFileState[serverName] = loadPerFileState(serverName) || { selectedPages: [], rotations: {}, total_pages: meta.total_pages || 1, clientName: meta.clientName, size: meta.size };
+      // load thumbnails into its tab
+      const total = perFileState[serverName].total_pages || meta.total_pages || 1;
+      loadThumbnails((typeof uploadsPreviewBase !== 'undefined' ? uploadsPreviewBase : '') + serverName, total, serverName).then(() => {
+        // switch to it when thumbnails ready (deduplicates)
+        switchTab(serverName);
+      }).catch(() => { switchTab(serverName); });
+      updateTabsUI();
+    }
+
+    function closeTab(serverName) {
+      const idx = openTabs.indexOf(serverName);
+      if (idx === -1) return;
+      // remove tab entry and DOM content
+      openTabs.splice(idx, 1);
+      const node = document.getElementById(`tab-${serverName}`);
+      if (node) node.remove();
+      if (activeTab === serverName) {
+        // switch to previous tab or null
+        const newActive = openTabs[idx] || openTabs[idx-1] || null;
+        if (newActive) switchTab(newActive);
+        else {
+          activeTab = null;
+          // clear pages/thumbs
+          document.getElementById('pagesList').innerHTML = '';
+          document.querySelectorAll('#previewContents .tab-content').forEach(n => n.classList.add('hidden'));
+          const nameEl = document.getElementById('selectedFilename'); if (nameEl) nameEl.innerText = 'None';
+        }
+      }
+      updateTabsUI();
     }
 
     // file input change: when a user selects a file via the hidden
@@ -1078,8 +1193,10 @@
     // update uploaded files select options
     function updateUploadedFilesSelect() {
       const sel = document.getElementById('uploadedFilesSelect');
-      if (!sel) return;
-      // clear and repopulate
+      const list = document.getElementById('uploadedFilesExplorerList');
+      const count = document.getElementById('uploadedFilesCount');
+      if (!sel || !list || !count) return;
+      // clear and repopulate select
       sel.innerHTML = '<option value="">-- Select uploaded file --</option>';
       uploadedFiles.forEach(f => {
         const opt = document.createElement('option');
@@ -1089,6 +1206,78 @@
       });
       // auto-select the last uploaded file
       if (uploadedFiles.length) sel.value = uploadedFiles[uploadedFiles.length - 1].serverName;
+
+      // render visible explorer list (mirrors the select)
+      list.innerHTML = '';
+      if (!uploadedFiles.length) {
+        list.innerHTML = '<div class="text-xs text-gray-400 italic">No uploaded files yet.</div>';
+        count.innerText = '0';
+        return;
+      }
+      uploadedFiles.forEach(f => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex items-center justify-between p-2 rounded hover:bg-gray-50';
+        // compact layout: checkbox adjacent to filename (no separator) and small icon buttons
+        wrapper.innerHTML = `
+          <div class="flex items-center space-x-2">
+            <input class="explorer-file-checkbox file-checkbox" type="checkbox" data-server="${f.serverName}" aria-label="Select ${f.clientName}" />
+            <div class="text-sm truncate" style="max-width:160px">${f.clientName}</div>
+            <div class="text-xs text-gray-400">${Math.round(f.size/1024)} KB</div>
+          </div>
+          <div class="flex items-center space-x-1">
+            <button class="open-file-icon focus:outline-none p-1 rounded" data-server="${f.serverName}" title="Open preview (tab)" aria-label="Open ${f.clientName} in preview" tabindex="0">
+              <!-- open icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4 4m0 0l-4 4m4-4H3" />
+              </svg>
+            </button>
+            <button class="preview-file-icon focus:outline-none p-1 rounded" data-server="${f.serverName}" title="Open raw file in new tab" aria-label="Preview ${f.clientName} in new window" tabindex="0">
+              <!-- preview/new tab icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h6m0 0v6M13 7L21 15M3 5a2 2 0 012-2h6" />
+              </svg>
+            </button>
+          </div>
+        `;
+        list.appendChild(wrapper);
+      });
+      count.innerText = String(uploadedFiles.length);
+
+      // delegate click handlers for open/preview/select
+      list.querySelectorAll('.open-file-icon').forEach(b => b.addEventListener('click', (ev) => {
+        const server = ev.currentTarget.getAttribute('data-server');
+        if (!server) return;
+        openPreviewTab(server);
+      }));
+
+      list.querySelectorAll('.preview-file-icon').forEach(b => b.addEventListener('click', (ev) => {
+        const server = ev.currentTarget.getAttribute('data-server');
+        if (!server) return;
+        // open the uploaded file preview in a new tab/window
+        const url = (typeof uploadsPreviewBase !== 'undefined' ? uploadsPreviewBase : '') + server;
+        try { window.open(url, '_blank'); } catch (e) { /* ignore */ }
+      }));
+
+      // selection behavior: when selection changes, debounce and auto-open if exactly one is selected
+      const debouncedSelectionChanged = debounce(() => {
+        const checked = Array.from(list.querySelectorAll('.explorer-file-checkbox:checked')).map(n => n.getAttribute('data-server'));
+        // update count/UI if needed
+        if (checked.length === 1) {
+          openPreviewTab(checked[0]);
+        }
+        // enable/disable file-level buttons
+        const selAllBtn = document.getElementById('selectAllBtnFiles');
+        const clearBtn = document.getElementById('clearAllBtnFiles');
+        if (selAllBtn) selAllBtn.disabled = uploadedFiles.length === 0;
+        if (clearBtn) clearBtn.disabled = uploadedFiles.length === 0;
+      }, 180);
+
+      list.querySelectorAll('.explorer-file-checkbox').forEach(cb => cb.addEventListener('change', debouncedSelectionChanged));
+      // ensure file-level buttons reflect current state
+      const selAllBtn = document.getElementById('selectAllBtnFiles');
+      const clearBtn = document.getElementById('clearAllBtnFiles');
+      if (selAllBtn) selAllBtn.disabled = uploadedFiles.length === 0;
+      if (clearBtn) clearBtn.disabled = uploadedFiles.length === 0;
     }
 
     // when user selects a different uploaded file from the dropdown
@@ -1136,8 +1325,19 @@
       document.querySelectorAll('.page-checkbox').forEach(cb => { cb.checked = true; cb.dispatchEvent(new Event('change')); });
     });
 
+
     document.getElementById('clearAllBtn').addEventListener('click', () => {
       document.querySelectorAll('.page-checkbox').forEach(cb => { cb.checked = false; cb.dispatchEvent(new Event('change')); });
+    });
+
+    // Select / Clear actions for the Files list
+    document.getElementById('selectAllBtnFiles').addEventListener('click', () => {
+      document.querySelectorAll('.file-checkbox').forEach(cb => { cb.checked = true; cb.dispatchEvent(new Event('change')); });
+    });
+
+
+    document.getElementById('clearAllBtnFiles').addEventListener('click', () => {
+      document.querySelectorAll('.file-checkbox').forEach(cb => { cb.checked = false; cb.dispatchEvent(new Event('change')); });
     });
 
     // getCheckedActions(): returns an array of enabled global actions
@@ -1151,24 +1351,9 @@
 
 
     function updateCompressInfo() {
-      const compressChecked = Array.from(document.querySelectorAll('.action-checkbox')).some(n => n.value === 'compress' && n.checked);
+      // Compression ratio UI removed — keep hidden to avoid UI clutter.
       const info = document.getElementById('compressInfo');
-      const orig = document.getElementById('origSize');
-      const est = document.getElementById('estSize');
-      const levelEl = document.getElementById('compressLevelSelect');
-      if (!info || !orig || !est) return;
-      if (!compressChecked) { info.classList.add('hidden'); return; }
-      // find active file (prefer explicit uploadedFilename, fallback to last uploaded)
-      const active = uploadedFiles.find(x => x.serverName === uploadedFilename) || uploadedFiles[uploadedFiles.length - 1];
-      if (!active) { info.classList.add('hidden'); return; }
-      info.classList.remove('hidden');
-      orig.innerText = `${Math.round(active.size / 1024)} KB`;
-      // heuristic estimate based on chosen compression level
-      const level = (levelEl && levelEl.value) ? levelEl.value : 'default';
-      const ratioMap = { 'none': 1.0, 'fast': 0.8, 'default': 0.6, 'best': 0.45 };
-      const ratio = ratioMap[level] || 0.6;
-      const estimated = Math.max(1, Math.round(active.size * ratio / 1024));
-      est.innerText = `${estimated} KB (~${Math.round(ratio * 100)}%)`;
+      if (info) info.classList.add('hidden');
     }
 
     // parsePagesInput(str): helper to parse page range strings like
@@ -1192,12 +1377,39 @@
       return Array.from(out).sort((a, b) => a - b);
     }
 
+    // refreshSelectedInfo(): update the small banner above previews
+    function refreshSelectedInfo() {
+      const fnameEl = document.getElementById('selectedFilename');
+      const pagesEl = document.getElementById('selectedPagesInfo');
+      try {
+        const meta = (uploadedFiles || []).find(x => x.serverName === uploadedFilename) || {};
+        if (fnameEl) fnameEl.innerText = meta.clientName || (uploadedFilename || 'None');
+        const st = perFileState[uploadedFilename] || { selectedPages: [] };
+        if (pagesEl) pagesEl.innerText = (st.selectedPages && st.selectedPages.length) ? st.selectedPages.join(',') : 'None';
+      } catch (e) { /* ignore */ }
+    }
+
+    // explorer toggle collapse
+    const explorerToggleBtn = document.getElementById('explorerToggle');
+    if (explorerToggleBtn) {
+      explorerToggleBtn.addEventListener('click', () => {
+        const list = document.getElementById('uploadedFilesExplorerList');
+        if (!list) return;
+        const hidden = list.classList.toggle('hidden');
+        explorerToggleBtn.innerText = hidden ? '+' : '−';
+        explorerToggleBtn.setAttribute('aria-expanded', String(!hidden));
+      });
+    }
+
     // showGeneratedFiles(listNames): render links for output files
     // produced by server side processing (preview/download links).
     function showGeneratedFiles(listNames) {
       const list = document.getElementById('generatedList');
       list.innerHTML = '';
+      const seen = new Set();
       (listNames || []).forEach(name => {
+        if (!name || seen.has(name)) return;
+        seen.add(name);
         const li = document.createElement('div');
         li.className = 'flex items-center justify-between p-2 border rounded-md bg-white';
         li.innerHTML = `<span class="truncate max-w-xs">${name}</span>
@@ -1214,7 +1426,9 @@
     // client-side-only preview; server must apply rotations to the PDF
     // when generating final outputs.
     function applyRotationToPreview(page, angle) {
-      const wrapper = document.getElementById(`thumb-p${page}`);
+      const server = activeTab || uploadedFilename;
+      if (!server) return;
+      const wrapper = document.getElementById(`thumb-${server}-p${page}`) || document.getElementById(`thumb-p${page}`);
       if (!wrapper) return;
       wrapper.style.transform = `rotate(${angle}deg)`;
       wrapper.style.transition = 'transform 240ms ease';
@@ -1224,15 +1438,17 @@
     // selected page in the UI and updates the per-page rotation state.
     document.getElementById('rotateSelectedBtn').addEventListener('click', () => {
       if (!uploadedFilename) { alert('Please upload a PDF first'); return; }
+      const st = perFileState[uploadedFilename] || { selectedPages: [], rotations: {} };
       const angle = parseInt(document.getElementById('rotateAngle').value || '90', 10);
-      if (selectedPages.length === 0) { alert('Select pages to rotate'); return; }
-      selectedPages.forEach(p => {
-        if (!pageRotations[p]) pageRotations[p] = 0;
-        pageRotations[p] = (pageRotations[p] + angle) % 360;
+      if (!st.selectedPages || st.selectedPages.length === 0) { alert('Select pages to rotate'); return; }
+      st.selectedPages.forEach(p => {
+        if (!st.rotations[p]) st.rotations[p] = 0;
+        st.rotations[p] = (st.rotations[p] + angle) % 360;
         const angleEl = document.getElementById(`angle-${p}`);
-        if (angleEl) angleEl.innerText = pageRotations[p] + '°';
-        applyRotationToPreview(p, pageRotations[p]);
+        if (angleEl) angleEl.innerText = st.rotations[p] + '°';
+        applyRotationToPreview(p, st.rotations[p]);
       });
+      savePerFileState(uploadedFilename);
     });
 
     // launchConfetti(): small celebratory effect used when outputs are generated
@@ -1295,66 +1511,84 @@
       if (!uploadedFilename && explorerSelected.length === 0) { alert('Please upload a PDF first or select files from the Uploaded Files explorer'); return; }
       if (actions.length === 0) { alert('Select at least one action'); return; }
 
+      // current per-file selection/rotations
+      const currentState = uploadedFilename ? (perFileState[uploadedFilename] || { selectedPages: [], rotations: {} }) : { selectedPages: [], rotations: {} };
+
+      // parse rotate range input and merge into rotations if provided
       const rotatePagesInput = document.getElementById('rotatePagesInput').value;
       const rotatePagesParsed = parsePagesInput(rotatePagesInput);
-
-      const rotations = {};
-      for (const [page, angle] of Object.entries(pageRotations)) {
-        rotations[String(page)] = angle;
-      }
+      const rotations = Object.assign({}, currentState.rotations || {});
       if (rotatePagesParsed && rotatePagesParsed.length > 0) {
         const globalAngle = parseInt(document.getElementById('rotateAngle').value || '90', 10);
         rotatePagesParsed.forEach(page => {
-          const current = rotations[String(page)] || 0;
-          rotations[String(page)] = (current + globalAngle) % 360;
+          const cur = rotations[String(page)] || 0;
+          rotations[String(page)] = (cur + globalAngle) % 360;
         });
       }
 
-      // build payload: support batch compression (filenames) and include chosen compression level
-      const payload = { actions: actions, pages: selectedPages, rotations: rotations };
+      // build payload: include actions, selected pages, rotations
+      const pagesForPrimary = Array.isArray(currentState.selectedPages) ? currentState.selectedPages.slice() : [];
+      const payload = { actions: actions, pages: pagesForPrimary, rotations: rotations };
       const compressSelected = actions.includes('compress');
       const compressLevel = (document.getElementById('compressLevelSelect') && document.getElementById('compressLevelSelect').value) || 'default';
-      if (compressSelected && explorerSelected.length > 0) {
-        payload.filenames = explorerSelected;
-        payload.compression_level = compressLevel;
-      } else {
-        // default single-file workflows continue to use 'filename'
-        payload.filename = uploadedFilename;
-        if (compressSelected) payload.compression_level = compressLevel;
+
+      // Determine filenames list (support explorer multi-select or single uploaded file)
+      const selectedFiles = (explorerSelected && explorerSelected.length) ? explorerSelected.slice() : (uploadedFilename ? [uploadedFilename] : []);
+
+      // always include filenames for batch operations (merge/files/compress)
+      if (selectedFiles.length > 0) payload.filenames = selectedFiles;
+      else if (uploadedFilename) payload.filename = uploadedFilename; // legacy single-file
+
+      if (compressSelected) payload.compression_level = compressLevel;
+
+      // Include merge_mode and file_page_map when merge is enabled
+      const mergeSelect = document.getElementById('mergeModePages');
+      const mergeValue = mergeSelect ? mergeSelect.value : 'pages';
+      // normalize to server merge_mode values
+      let merge_mode = 'none';
+      if (mergeValue === 'pages') merge_mode = 'pages_per_file';
+      else if (mergeValue === 'files') merge_mode = 'files_whole';
+      else if (mergeValue === 'files_pages') merge_mode = 'files_and_pages';
+      payload.merge_mode = merge_mode;
+
+      // For modes that need per-file page maps, build a map of serverName -> pages using perFileState when available
+      if (merge_mode === 'pages_per_file' || merge_mode === 'files_and_pages') {
+        const filePageMap = {};
+        const targets = (payload.filenames && payload.filenames.length) ? payload.filenames : (payload.filename ? [payload.filename] : []);
+        targets.forEach(fn => {
+          const st = perFileState[fn] || { selectedPages: [] };
+          filePageMap[fn] = Array.isArray(st.selectedPages) ? st.selectedPages.slice() : [];
+        });
+        payload.file_page_map = filePageMap;
       }
 
-      const resp = await fetch(processUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const data = await resp.json();
-      showGeneratedFiles(data.generated || []);
-
-      // surprise: if generated files were produced, launch confetti
-      if (data.generated && data.generated.length > 0) {
-        try { launchConfetti(); } catch (e) { /* non-fatal */ }
-      }
+      try {
+        const resp = await fetch(processUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await resp.json();
+        showGeneratedFiles(data.generated || []);
+        // surprise: if generated files were produced, launch confetti
+        if (data.generated && data.generated.length > 0) { try { launchConfetti(); } catch (e) { /* non-fatal */ } }
+      } catch (err) { console.warn('Generate failed', err); alert('Generation failed'); }
     });
 
     // Export to Word: send selected pages to server to convert to Word
     document.getElementById('pdfToWordBtn').addEventListener('click', async () => {
       if (!uploadedFilename) { alert('Upload a PDF first'); return; }
-      if (selectedPages.length === 0) { alert('Select pages to export'); return; }
-      const resp = await fetch(pdfToWordUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: uploadedFilename, pages: selectedPages }) });
+      const st = perFileState[uploadedFilename] || { selectedPages: [] };
+      if (!st.selectedPages || st.selectedPages.length === 0) { alert('Select pages to export'); return; }
+      const resp = await fetch(pdfToWordUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: uploadedFilename, pages: st.selectedPages }) });
       const data = await resp.json();
-      if (data.generated && data.generated.length) {
-        showGeneratedFiles((data.generated || []));
-        try { launchConfetti(); } catch (e) { }
-      } else { alert('Conversion failed'); }
+      if (data.generated && data.generated.length) { showGeneratedFiles((data.generated || [])); try { launchConfetti(); } catch (e) { } } else { alert('Conversion failed'); }
     });
 
     // Export to Excel: send selected pages to server to convert to Excel
     document.getElementById('pdfToExcelBtn').addEventListener('click', async () => {
       if (!uploadedFilename) { alert('Upload a PDF first'); return; }
-      if (selectedPages.length === 0) { alert('Select pages to export'); return; }
-      const resp = await fetch(pdfToExcelUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: uploadedFilename, pages: selectedPages }) });
+      const st = perFileState[uploadedFilename] || { selectedPages: [] };
+      if (!st.selectedPages || st.selectedPages.length === 0) { alert('Select pages to export'); return; }
+      const resp = await fetch(pdfToExcelUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: uploadedFilename, pages: st.selectedPages }) });
       const data = await resp.json();
-      if (data.generated && data.generated.length) {
-        showGeneratedFiles((data.generated || []));
-        try { launchConfetti(); } catch (e) { }
-      } else { alert('Conversion failed'); }
+      if (data.generated && data.generated.length) { showGeneratedFiles((data.generated || [])); try { launchConfetti(); } catch (e) { } } else { alert('Conversion failed'); }
     });
   </script>
 </body>

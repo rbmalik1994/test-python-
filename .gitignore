@@ -74,3 +74,8 @@ docker-compose.override.yml
 
 # Misc
 *.lock
+
+
+
+#Custom ignores
+temp_data/
