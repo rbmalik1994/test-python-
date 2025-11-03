@@ -142,46 +142,149 @@
           <div class="w-1/3 min-w-[220px]">
             <label for="pdfUpload" class="block text-sm font-medium text-gray-700 sr-only">Upload PDF</label>
 
-            <!-- Entire dashed area is the browse target and supports drag/drop.
-         Reduced height (h-36) and added clear file button. -->
+            <!-- upload area: simplified, no filename overlay here.
+             Progress/queue shown inside the drop area instead — uploaded filenames
+             remain in the Uploaded Files explorer. -->
             <div id="uploadDrop"
-              class="relative mt-3 flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-md cursor-pointer bg-red-50 hover:bg-red-100 text-center w-full h-36"
+              class="relative mt-3 flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl cursor-pointer bg-gradient-to-br from-red-50 to-white hover:from-red-100 text-center w-full h-36 transition"
               role="button" tabindex="0" aria-label="Upload PDF, click or drag and drop"
               onclick="document.getElementById('pdfUpload').click()"
               onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); document.getElementById('pdfUpload').click(); }">
-              <div class="flex flex-col items-center">
-                <div class="text-red-600 text-4xl">📄</div>
-                <div class="mt-2 text-sm text-gray-600">Drag &amp; drop a PDF here, or click to browse</div>
-                <div class="mt-2 text-xs text-gray-500">Supported: .pdf</div>
+              <div class="flex flex-col items-center pointer-events-none">
+                <div class="animate-pulse" aria-hidden="false" role="img" aria-label="PDF upload icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12" viewBox="0 0 64 64" focusable="false">
+                    <!-- page body -->
+                    <rect x="8" y="6" width="48" height="52" rx="6" fill="#ef4444" />
+                    <!-- folded corner -->
+                    <polygon points="40,6 56,6 40,18" fill="#fca5a5" />
+                    <!-- subtle white paper inner -->
+                    <rect x="12" y="10" width="36" height="40" rx="3" fill="#fff" opacity="0.06" />
+                    <!-- PDF label -->
+                    <text x="32" y="38" fill="#fff" font-size="10" font-weight="700" text-anchor="middle"
+                      font-family="Arial, Helvetica, sans-serif">PDF</text>
+                  </svg>
+                </div>
+                <div class="mt-2 text-sm text-gray-600">Drop PDF here, or click to browse</div>
+                <div class="mt-1 text-xs text-gray-400">Supported: .pdf • Multiple files allowed</div>
               </div>
 
               <!-- Clear file button (top-right of drop area) -->
               <button id="clearFileBtn" type="button"
                 class="absolute top-2 right-2 text-xs px-2 py-1 bg-white border rounded-md text-gray-600 hover:bg-gray-50"
                 aria-label="Clear uploaded file"
-                onclick="(function(){ try{ const f = document.getElementById('pdfUpload'); if(f) f.value=''; const filename = window.uploadedFilename || ''; if(filename && typeof uploadUrl !== 'undefined'){ try{ fetch(uploadUrl, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }) }).catch(()=>{}); }catch(e){} } window.uploadedFilename=''; window.uploadedFiles = []; if(typeof updateUploadedFilesSelect==='function') updateUploadedFilesSelect(); // ensure visible explorer and hidden select are reset
-                  const explorerList = document.getElementById('uploadedFilesExplorerList'); if(explorerList) explorerList.innerHTML = '<div class=\'text-xs text-gray-400 italic\'>No uploaded files yet.</div>'; const filesCount = document.getElementById('uploadedFilesCount'); if(filesCount) filesCount.innerText = '0'; const sel = document.getElementById('uploadedFilesSelect'); if(sel) sel.innerHTML = '<option value=\'\'>-- Select uploaded file --</option>'; const toggle = document.getElementById('explorerToggle'); if(toggle){ toggle.innerText = '−'; toggle.setAttribute('aria-expanded', 'true'); }
-                  const thumbs = document.getElementById('thumbs'); if(thumbs) thumbs.innerHTML=''; const pages = document.getElementById('pagesList'); if(pages) pages.innerHTML=''; const nameEl = document.getElementById('uploadedName'); if(nameEl) nameEl.innerText=''; const gen = document.getElementById('generatedList'); if(gen) gen.innerHTML=''; window.pageRotations = {}; window.selectedPages = []; document.querySelectorAll('.action-checkbox').forEach(n=>n.checked=false); document.querySelectorAll('.tool-btn').forEach(b=>{ b.classList.remove('bg-red-50','border-red-300'); }); }catch(e){} })();">
+                onclick="(function(){ try{ const f = document.getElementById('pdfUpload'); if(f) f.value=''; const filename = window.uploadedFilename || ''; if(filename && typeof uploadUrl !== 'undefined'){ try{ fetch(uploadUrl, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }) }).catch(()=>{}); }catch(e){} } window.uploadedFilename=''; window.uploadedFiles = []; if(typeof updateUploadedFilesSelect==='function') updateUploadedFilesSelect(); const explorerList = document.getElementById('uploadedFilesExplorerList'); if(explorerList) explorerList.innerHTML = '<div class=\'text-xs text-gray-400 italic\'>No uploaded files yet.</div>'; const filesCount = document.getElementById('uploadedFilesCount'); if(filesCount) filesCount.innerText = '0'; const sel = document.getElementById('uploadedFilesSelect'); if(sel) sel.innerHTML = '<option value=\'\'>-- Select uploaded file --</option>'; const toggle = document.getElementById('explorerToggle'); if(toggle){ toggle.innerText = '−'; toggle.setAttribute('aria-expanded', 'true'); } const thumbs = document.getElementById('thumbs'); if(thumbs) thumbs.innerHTML=''; const pages = document.getElementById('pagesList'); if(pages) pages.innerHTML=''; const gen = document.getElementById('generatedList'); if(gen) gen.innerHTML=''; window.pageRotations = {}; window.selectedPages = []; document.querySelectorAll('.action-checkbox').forEach(n=>n.checked=false); document.querySelectorAll('.tool-btn').forEach(b=>{ b.classList.remove('bg-red-50','border-red-300'); }); }catch(e){} })();">
                 Clear
               </button>
 
               <!-- Hidden native file input; clicking the entire area opens it. -->
               <input id="pdfUpload" type="file" accept="application/pdf" class="hidden" multiple />
 
-              <!-- Uploaded filename feedback (centered at bottom) -->
-              <div class="absolute left-1/2 transform -translate-x-1/2 bottom-3 px-2">
-                <span id="uploadedName" class="text-sm text-gray-600 truncate max-w-[180px] block"></span>
-              </div>
+              <!-- Upload queue / progress (shows file-level progress while uploading).
+           Note: we intentionally do not display the "current uploaded filename" here —
+           uploaded files are visible in the Uploaded Files explorer to the left. -->
+              <div id="uploadQueue" class="absolute left-3 right-3 bottom-3 space-y-2 text-left"></div>
             </div>
           </div>
         </div>
       </div>
 
+      <script>
+        // Override default file-change behavior with a progress-aware uploader.
+        document.addEventListener('DOMContentLoaded', () => {
+          const inp = document.getElementById('pdfUpload');
+          const queue = document.getElementById('uploadQueue');
+          if (!inp || !queue) return;
+
+          inp.addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files || []);
+            if (!files.length) return;
+            for (const f of files) {
+              await uploadWithProgress(f);
+            }
+            // clear native file input after queued uploads
+            try { inp.value = ''; } catch (e) { }
+          });
+
+          async function uploadWithProgress(file) {
+            return new Promise((resolve) => {
+              // create UI row
+              const row = document.createElement('div');
+              row.className = 'bg-gray-900 text-white border border-gray-700 rounded-md p-2 shadow-sm flex flex-col';
+              row.innerHTML = `
+              <div class="flex items-center justify-between">
+                <div class="text-sm font-medium truncate" title="${file.name}">${file.name}</div>
+                <div class="text-xs text-gray-300 status">Uploading...</div>
+              </div>
+              <div class="w-full bg-gray-700 h-2 rounded overflow-hidden mt-2">
+                <div class="progress-bar bg-red-600 h-2 w-0" style="width:0%"></div>
+              </div>
+              `;
+              queue.appendChild(row);
+              const progressBar = row.querySelector('.progress-bar');
+              const status = row.querySelector('.status');
+
+              // use XHR to capture upload progress
+              try {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', (typeof uploadUrl !== 'undefined' ? uploadUrl : '/'));
+                xhr.upload.onprogress = (ev) => {
+                  if (ev.lengthComputable) {
+                    const pct = Math.round((ev.loaded / ev.total) * 100);
+                    if (progressBar) progressBar.style.width = pct + '%';
+                    if (status) status.innerText = pct + '%';
+                  }
+                };
+                xhr.onreadystatechange = () => {
+                  if (xhr.readyState === 4) {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                      let data = null;
+                      try { data = JSON.parse(xhr.responseText); } catch (e) { data = null; }
+                      if (data && data.filename) {
+                        // mirror existing uploadFile behavior: register uploaded file and load previews
+                        const fileObj = { clientName: file.name, size: file.size, serverName: data.filename, total_pages: data.total_pages };
+                        window.uploadedFilename = data.filename;
+                        window.uploadedFiles = window.uploadedFiles || [];
+                        window.uploadedFiles.push(fileObj);
+                        if (typeof updateUploadedFilesSelect === 'function') updateUploadedFilesSelect();
+                        // do not show filename inside drop area — explorer handles that
+                        try {
+                          if (typeof loadPages === 'function') loadPages(data.total_pages);
+                          if (typeof loadThumbnails === 'function') loadThumbnails((typeof uploadsPreviewBase !== 'undefined' ? uploadsPreviewBase : '') + data.filename, data.total_pages);
+                        } catch (e) { /* non-fatal */ }
+                        if (progressBar) progressBar.style.width = '100%';
+                        if (status) status.innerText = 'Done';
+                        // small delay then remove row (optional)
+                        setTimeout(() => { row.remove(); }, 1600);
+                        resolve(data);
+                      } else {
+                        if (status) status.innerText = 'Failed';
+                        row.classList.add('opacity-80');
+                        resolve(null);
+                      }
+                    } else {
+                      if (status) status.innerText = 'Error';
+                      row.classList.add('opacity-80');
+                      resolve(null);
+                    }
+                  }
+                };
+                const fd = new FormData();
+                fd.append('pdf', file);
+                xhr.send(fd);
+              } catch (e) {
+                if (status) status.innerText = 'Error';
+                resolve(null);
+              }
+            });
+          }
+        });
+      </script>
+
       <!-- Smart tool area -->
       <!-- Inline toggle-group toolbox: placed under the Smart PDF Toolbox header and above the pages section.
         Keeps same hidden checkboxes and IDs so existing JS logic remains unchanged. -->
       <div id="inlineToolGroupContainer" class="mt-4">
-        <div id="inlineToolGroup" role="toolbar" aria-label="PDF Actions" class="flex flex-wrap items-center gap-2">
+    <div id="inlineToolGroup" role="toolbar" aria-label="PDF Actions" class="flex items-center gap-2 flex-nowrap overflow-x-auto whitespace-nowrap">
           <!-- hidden checkboxes (server logic unchanged) -->
           <input class="sr-only action-checkbox" type="checkbox" value="compress" id="chk-compress" />
           <input class="sr-only action-checkbox" type="checkbox" value="merge" id="chk-merge" />
@@ -189,160 +292,486 @@
           <input class="sr-only action-checkbox" type="checkbox" value="remove" id="chk-remove" />
           <input class="sr-only action-checkbox" type="checkbox" value="rotate" id="chk-rotate" />
 
-          <!-- Toggle buttons -->
-          <button type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
-         data-action="compress" aria-pressed="false" title="Compress">
-         <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h4l3 10h4l3-10h4"></path>
-         </svg>
-         Compress
-          </button>
+          <!-- Compress: single inline button with hover/focus popover (no extra column) -->
+          <div class="relative" style="display:inline-block;">
+            <button id="compressBtn" type="button"
+              class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+              data-action="compress" aria-pressed="false" title="Compress" aria-haspopup="true" aria-expanded="false">
+              <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                <title>Compress</title>
+                <path d="M3 8h6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                <polyline points="7 5 10 8 7 11" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                <path d="M21 16h-6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                <polyline points="17 19 14 16 17 13" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                <rect x="9.5" y="6.5" width="5" height="3" rx="1" fill="none" stroke="currentColor"
+                  stroke-width="1.5" />
+                <rect x="9.5" y="14.5" width="5" height="3" rx="1" fill="none" stroke="currentColor"
+                  stroke-width="1.5" />
+                <path d="M12 9.5v5" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+              </svg>
 
-          <button type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
-         data-action="merge" aria-pressed="false" title="Merge Selected Pages">
-         <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h4l3 10h4l3-10h4"></path>
-         </svg>
-         Merge
-          </button>
+              <span class="label">Compress</span>
 
-          <button type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
-         data-action="split" aria-pressed="false" title="Split">
-         <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14"></path>
-         </svg>
-         Split
-          </button>
+              <!-- small current-level badge (updated when selected) -->
+              <span id="compressBadge"
+                class="ml-2 text-xs text-gray-500 px-1 py-0.5 rounded bg-gray-100 hidden">Balanced</span>
 
-          <button type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
-         data-action="remove" aria-pressed="false" title="Remove pages">
-         <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-         </svg>
-         Remove
-          </button>
+              <!-- caret -->
+              <svg class="w-3 h-3 ml-2 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                  clip-rule="evenodd" />
+              </svg>
+            </button>
 
-          <div class="flex items-center space-x-2">
-         <button type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
-           data-action="rotate" aria-pressed="false" title="Rotate">
-           <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v6h6"></path>
-           </svg>
-           Rotate
-         </button>
+            <!-- Popover: absolute, doesn't affect layout and shows on hover/focus -->
+            <div id="compressPopover"
+              class="hidden absolute left-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg p-2 text-sm z-40"
+              role="menu" aria-label="Compression options">
+              <div class="mb-2 text-xs text-gray-500">Compression level</div>
+              <select id="compressLevelSelect" class="block w-full rounded-md border px-2 py-1 text-sm"
+                aria-label="Compression level">
+                <option value="default">Balanced</option>
+                <option value="fast">Fast (lighter)</option>
+                <option value="best">Best (stronger)</option>
+                <option value="none">None</option>
+              </select>
 
-         <label for="rotateAngle" class="sr-only">Rotate angle</label>
-         <select id="rotateAngle" class="rounded-md border text-sm p-1" aria-label="Rotate angle">
-           <option value="90">90°</option>
-           <option value="180">180°</option>
-           <option value="270">270°</option>
-         </select>
-
-         <button id="rotateSelectedBtn" type="button" class="px-3 py-2 bg-red-100 text-red-700 rounded-md border text-sm">Rotate Selected</button>
+              <div class="mt-2 flex items-center justify-between">
+                <button id="compressApplyBtn" type="button"
+                  class="w-full mr-2 inline-flex justify-center items-center px-2 py-1 bg-red-600 text-white rounded text-sm">Apply
+                  & Enable</button>
+              </div>
+            </div>
           </div>
 
-          <div class="ml-2">
-         <button id="generateBtn" type="button" class="px-4 py-2 bg-red-600 text-white rounded-md shadow text-sm">Generate</button>
+          <script>
+            (function () {
+              const chk = document.getElementById('chk-compress'); // hidden checkbox (keeps server integration)
+              const btn = document.getElementById('compressBtn');
+              const pop = document.getElementById('compressPopover');
+              const sel = document.getElementById('compressLevelSelect');
+              const badge = document.getElementById('compressBadge');
+              const applyBtn = document.getElementById('compressApplyBtn');
+
+              const labelMap = { default: 'Balanced', fast: 'Fast', best: 'Best', none: 'None' };
+
+              // Update the button label / badge based on selection & checked state
+              function refreshButtonUI() {
+                const level = sel ? sel.value : 'default';
+                const pretty = labelMap[level] || level;
+                if (chk && chk.checked) {
+                  badge.innerText = pretty;
+                  badge.classList.remove('hidden');
+                  btn.setAttribute('aria-pressed', 'true');
+                  btn.classList.add('bg-red-50', 'border-red-300');
+                } else {
+                  badge.classList.add('hidden');
+                  btn.setAttribute('aria-pressed', 'false');
+                  btn.classList.remove('bg-red-50', 'border-red-300');
+                }
+                // keep compress info in sync
+                if (typeof updateCompressInfo === 'function') updateCompressInfo();
+              }
+
+              // show/hide popover with small delay to make hover usable
+              let hideTimer = null;
+              function showPopover() {
+                if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+                pop.classList.remove('hidden');
+                btn.setAttribute('aria-expanded', 'true');
+              }
+              function hidePopoverSoon() {
+                if (hideTimer) clearTimeout(hideTimer);
+                hideTimer = setTimeout(() => {
+                  pop.classList.add('hidden');
+                  btn.setAttribute('aria-expanded', 'false');
+                }, 180);
+              }
+
+              // clicking the button toggles the checkbox (existing toolbar handler also does this)
+              btn.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                // toggle underlying checkbox to keep server-side expectations
+                if (chk) {
+                  chk.checked = !chk.checked;
+                  // small pulse animation when enabling
+                  if (chk.checked) {
+                    btn.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.04)' }, { transform: 'scale(1)' }], { duration: 260 });
+                  }
+                }
+                refreshButtonUI();
+                // if enabling via click, open popover so user can adjust options immediately
+                try {
+                  if (chk && chk.checked) showPopover();
+                  else hidePopoverSoon();
+                } catch (e) { /* ignore if functions unavailable */ }
+              });
+
+              // hover & focus interactions
+              btn.addEventListener('mouseenter', showPopover);
+              btn.addEventListener('mouseleave', hidePopoverSoon);
+              pop.addEventListener('mouseenter', showPopover);
+              pop.addEventListener('mouseleave', hidePopoverSoon);
+
+              // keyboard accessibility: open popover on focus, close on blur/escape
+              btn.addEventListener('focus', showPopover);
+              btn.addEventListener('blur', hidePopoverSoon);
+              pop.addEventListener('focusout', hidePopoverSoon);
+              document.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Escape') {
+                  pop.classList.add('hidden');
+                  btn.setAttribute('aria-expanded', 'false');
+                  btn.focus();
+                }
+              });
+
+              // apply button: enable compress and close popover
+              applyBtn.addEventListener('click', () => {
+                if (chk) chk.checked = true;
+                refreshButtonUI();
+                pop.classList.add('hidden');
+                btn.setAttribute('aria-expanded', 'false');
+                btn.focus();
+                // tiny celebratory "surprise" when user explicitly enables best level
+                if (sel.value === 'best') {
+                  try { launchConfetti(); } catch (e) { /* non-fatal */ }
+                }
+              });
+
+              // when level changes, update UI immediately (but don't enable unless user applies or toggles)
+              sel.addEventListener('change', () => {
+                // reflect choice in badge for preview if already enabled
+                refreshButtonUI();
+              });
+
+              // sync initial state
+              refreshButtonUI();
+
+              // if hidden checkbox changes elsewhere (toolbar handler), reflect changes here
+              if (chk) chk.addEventListener('change', refreshButtonUI);
+
+              // ensure popover does not introduce layout spacing (already absolute),
+              // and keep it inside viewport horizontally
+              function adjustPopover() {
+                if (!pop) return;
+                const rect = pop.getBoundingClientRect();
+                if (rect.right > window.innerWidth - 8) pop.style.right = '0', pop.style.left = 'auto';
+                else { pop.style.left = ''; pop.style.right = ''; }
+              }
+              window.addEventListener('resize', adjustPopover);
+              // small delay to allow initial rendering
+              setTimeout(adjustPopover, 50);
+            })();
+          </script>
+
+
+          <div class="relative inline-block">
+            <button id="mergeBtn" type="button"
+              class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+              data-action="merge" aria-pressed="false" title="Merge" aria-haspopup="true" aria-expanded="false">
+            <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+              <title>Merge</title>
+              <path d="M3 6h8" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
+              <polyline points="8 4 11 6 8 8" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                fill="none" />
+              <path d="M21 6h-8" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
+              <polyline points="16 4 13 6 16 8" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                fill="none" />
+              <path d="M12 6v8" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
+              <polyline points="9.5 15 12 18 14.5 15" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                fill="none" />
+            </svg>
+            <span class="label">Merge</span>
+            <span id="mergeBadge" class="ml-2 text-xs text-gray-500 px-1 py-0.5 rounded bg-gray-100 hidden">Pages</span>
+            <svg class="w-3 h-3 ml-2 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd"
+                d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                clip-rule="evenodd" />
+            </svg>
+            </button>
+
+            <div id="mergePopover"
+              class="hidden absolute left-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg p-3 text-sm z-40"
+              role="menu" aria-label="Merge options">
+            <div class="mb-2 text-xs text-gray-500">Merge mode</div>
+
+            <div class="space-y-2">
+              <label class="flex items-center space-x-2">
+                <input type="radio" name="mergeMode" value="pages" id="mergeModePages" checked />
+                <span class="text-sm">Pages (merge selected pages)</span>
+              </label>
+              <label class="flex items-center space-x-2">
+                <input type="radio" name="mergeMode" value="files" id="mergeModeFiles" />
+                <span class="text-sm">Files (merge selected uploaded files)</span>
+              </label>
+            </div>
+
+            <div class="mt-3">
+              <button id="mergeApplyBtn" type="button"
+                class="w-full inline-flex justify-center items-center px-2 py-1 bg-red-600 text-white rounded text-sm">Apply
+                & Enable</button>
+            </div>
           </div>
         </div>
 
-        <div class="mt-2 text-xs text-gray-500">Tip: toggle tools to enable actions, select pages from the left column, then click Generate.</div>
+        <script>
+          (function () {
+            const chk = document.getElementById('chk-merge');
+            const btn = document.getElementById('mergeBtn');
+            const pop = document.getElementById('mergePopover');
+            const badge = document.getElementById('mergeBadge');
+            const applyBtn = document.getElementById('mergeApplyBtn');
+            const radios = Array.from(pop ? pop.querySelectorAll('input[name="mergeMode"]') : []);
+
+            function currentMode() {
+              const r = radios.find(r => r.checked);
+              return r ? r.value : 'pages';
+            }
+
+            function refreshButtonUI() {
+              const mode = currentMode();
+              const pretty = mode === 'files' ? 'Files' : 'Pages';
+              if (chk && chk.checked) {
+                badge.innerText = pretty;
+                badge.classList.remove('hidden');
+                btn.setAttribute('aria-pressed', 'true');
+                btn.classList.add('bg-red-50', 'border-red-300');
+              } else {
+                badge.classList.add('hidden');
+                btn.setAttribute('aria-pressed', 'false');
+                btn.classList.remove('bg-red-50', 'border-red-300');
+              }
+            }
+
+            // popover handlers
+            let hideTimer = null;
+            function showPopover() {
+              if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+              pop.classList.remove('hidden');
+              btn.setAttribute('aria-expanded', 'true');
+            }
+            function hidePopoverSoon() {
+              if (hideTimer) clearTimeout(hideTimer);
+              hideTimer = setTimeout(() => {
+                pop.classList.add('hidden');
+                btn.setAttribute('aria-expanded', 'false');
+              }, 180);
+            }
+
+            btn.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              if (chk) {
+                chk.checked = !chk.checked;
+                if (chk.checked) {
+                  btn.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.04)' }, { transform: 'scale(1)' }], { duration: 220 });
+                }
+              }
+              refreshButtonUI();
+              // open the merge popover when enabling via click so users can choose mode
+              try {
+                if (chk && chk.checked) showPopover();
+                else hidePopoverSoon();
+              } catch (e) { /* non-fatal */ }
+            });
+
+            btn.addEventListener('mouseenter', showPopover);
+            btn.addEventListener('mouseleave', hidePopoverSoon);
+            pop.addEventListener('mouseenter', showPopover);
+            pop.addEventListener('mouseleave', hidePopoverSoon);
+
+            btn.addEventListener('focus', showPopover);
+            btn.addEventListener('blur', hidePopoverSoon);
+            pop.addEventListener('focusout', hidePopoverSoon);
+            document.addEventListener('keydown', (ev) => {
+              if (ev.key === 'Escape') {
+                pop.classList.add('hidden');
+                btn.setAttribute('aria-expanded', 'false');
+                btn.focus();
+              }
+            });
+
+            applyBtn.addEventListener('click', () => {
+              if (chk) chk.checked = true;
+              refreshButtonUI();
+              pop.classList.add('hidden');
+              btn.setAttribute('aria-expanded', 'false');
+              btn.focus();
+            });
+
+            radios.forEach(r => r.addEventListener('change', refreshButtonUI));
+
+            refreshButtonUI();
+            if (chk) chk.addEventListener('change', refreshButtonUI);
+
+            function adjustPopover() {
+              if (!pop) return;
+              const rect = pop.getBoundingClientRect();
+              if (rect.right > window.innerWidth - 8) pop.style.right = '0', pop.style.left = 'auto';
+              else { pop.style.left = ''; pop.style.right = ''; }
+            }
+            window.addEventListener('resize', adjustPopover);
+            setTimeout(adjustPopover, 50);
+          })();
+        </script>
+
+
+
+        <button type="button"
+          class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+          data-action="split" aria-pressed="false" title="Split">
+          <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14"></path>
+          </svg>
+          Split
+        </button>
+
+        <button type="button"
+          class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+          data-action="remove" aria-pressed="false" title="Remove pages">
+          <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+          Remove
+        </button>
+
+        <div class="flex items-center space-x-2">
+          <button type="button"
+            class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+            data-action="rotate" aria-pressed="false" title="Rotate">
+            <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v6h6"></path>
+            </svg>
+            Rotate
+          </button>
+
+          <label for="rotateAngle" class="sr-only">Rotate angle</label>
+          <select id="rotateAngle" class="rounded-md border text-sm p-1" aria-label="Rotate angle">
+            <option value="90">90°</option>
+            <option value="180">180°</option>
+            <option value="270">270°</option>
+          </select>
+
+          <button id="rotateSelectedBtn" type="button"
+            class="px-3 py-2 bg-red-100 text-red-700 rounded-md border text-sm">Rotate Selected</button>
+        </div>
+
+        <div class="ml-2">
+          <button id="generateBtn" type="button"
+            class="px-4 py-2 bg-red-600 text-white rounded-md shadow text-sm">Generate</button>
+        </div>
       </div>
 
-      <script>
-        // Make the inline toggle-group keyboard accessible and keep hidden checkboxes in sync.
-        (function () {
-          const group = document.getElementById('inlineToolGroup');
-          if (!group) return;
+      <div class="mt-2 text-xs text-gray-500">Tip: toggle tools to enable actions, select pages from the left column,
+        then click Generate.</div>
+    </div>
 
-          group.addEventListener('click', (ev) => {
-         const btn = ev.target.closest('.tool-btn');
-         if (!btn) return;
-         const action = btn.getAttribute('data-action');
-         if (!action) return;
-         const checkbox = Array.from(document.querySelectorAll('.action-checkbox')).find(n => n.value === action);
-         if (!checkbox) return;
-         checkbox.checked = !checkbox.checked;
-         const pressed = checkbox.checked;
-         btn.setAttribute('aria-pressed', String(pressed));
-         btn.classList.toggle('bg-red-50', pressed);
-         btn.classList.toggle('border-red-300', pressed);
-         if (typeof updateCompressInfo === 'function') updateCompressInfo();
+    <script>
+      // Make the inline toggle-group keyboard accessible and keep hidden checkboxes in sync.
+      (function () {
+        const group = document.getElementById('inlineToolGroup');
+        if (!group) return;
+
+        group.addEventListener('click', (ev) => {
+          // If an inner handler already called preventDefault() (e.g. the
+          // individual Compress/Merge button handlers), don't double-toggle
+          // the underlying hidden checkbox. This avoids the situation where
+          // clicking the button both opens the popover and immediately
+          // (incorrectly) toggles the selection.
+          if (ev.defaultPrevented) return;
+
+          const btn = ev.target.closest('.tool-btn');
+          if (!btn) return;
+          const action = btn.getAttribute('data-action');
+          if (!action) return;
+          const checkbox = Array.from(document.querySelectorAll('.action-checkbox')).find(n => n.value === action);
+          if (!checkbox) return;
+          checkbox.checked = !checkbox.checked;
+          const pressed = checkbox.checked;
+          btn.setAttribute('aria-pressed', String(pressed));
+          btn.classList.toggle('bg-red-50', pressed);
+          btn.classList.toggle('border-red-300', pressed);
+          if (typeof updateCompressInfo === 'function') updateCompressInfo();
+        });
+
+        // keyboard activation for each button
+        group.querySelectorAll('.tool-btn').forEach(b => {
+          b.setAttribute('tabindex', '0');
+          b.addEventListener('keydown', (ev) => {
+            if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); b.click(); }
           });
+        });
+      })();
+    </script>
 
-          // keyboard activation for each button
-          group.querySelectorAll('.tool-btn').forEach(b => {
-         b.setAttribute('tabindex', '0');
-         b.addEventListener('keydown', (ev) => {
-           if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); b.click(); }
-         });
-          });
-        })();
-      </script>
-
-      <div class="mt-6 grid grid-cols-1 md:grid-cols-12 gap-6">
-        <!-- Left column: Pages list and per-page controls -->
-        <section class="md:col-span-3 bg-white rounded-lg p-4 shadow-sm">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="font-semibold">Pages</h3>
-            <div class="space-x-2">
-              <button id="selectAllBtn"
-                class="inline-flex items-center px-2 py-1 text-sm bg-red-600 text-white rounded-md">Select All</button>
-              <button id="clearAllBtn"
-                class="inline-flex items-center px-2 py-1 text-sm bg-gray-100 rounded-md text-gray-700">Clear</button>
-            </div>
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-12 gap-6">
+      <!-- Left column: Pages list and per-page controls -->
+      <section class="md:col-span-3 bg-white rounded-lg p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold">Pages</h3>
+          <div class="space-x-2">
+            <button id="selectAllBtn"
+              class="inline-flex items-center px-2 py-1 text-sm bg-red-600 text-white rounded-md">Select All</button>
+            <button id="clearAllBtn"
+              class="inline-flex items-center px-2 py-1 text-sm bg-gray-100 rounded-md text-gray-700">Clear</button>
           </div>
-          <!-- When multiple files are uploaded the user can switch between them -->
-          <div class="mb-3">
-            <label for="uploadedFilesSelect" class="sr-only">Select uploaded file</label>
-            <!-- Explorer-style uploaded files (VS Code-like) -->
-            <div id="uploadedFilesExplorer" class="border border-gray-200 rounded-md bg-white p-2">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center space-x-2">
-                  <svg class="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
-                  </svg>
-                  <span class="font-medium text-sm">Uploaded Files</span>
-                  <span id="uploadedFilesCount" class="ml-2 text-xs text-gray-500">0</span>
-                </div>
-
-                <div class="flex items-center space-x-2">
-                  <button id="explorerToggle" type="button" aria-expanded="true"
-                    class="text-sm text-gray-500 px-2 py-1 rounded hover:bg-gray-100">−</button>
-                </div>
+        </div>
+        <!-- When multiple files are uploaded the user can switch between them -->
+        <div class="mb-3">
+          <label for="uploadedFilesSelect" class="sr-only">Select uploaded file</label>
+          <!-- Explorer-style uploaded files (VS Code-like) -->
+          <div id="uploadedFilesExplorer" class="border border-gray-200 rounded-md bg-white p-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <svg class="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
+                </svg>
+                <span class="font-medium text-sm">Uploaded Files</span>
+                <span id="uploadedFilesCount" class="ml-2 text-xs text-gray-500">0</span>
               </div>
 
-              <div id="uploadedFilesExplorerList" class="mt-2 space-y-1 max-h-40 overflow-auto">
-                <!-- items rendered dynamically from the (hidden) select below -->
-                <div class="text-xs text-gray-400 italic">No uploaded files yet.</div>
+              <div class="flex items-center space-x-2">
+                <button id="explorerToggle" type="button" aria-expanded="true"
+                  class="text-sm text-gray-500 px-2 py-1 rounded hover:bg-gray-100">−</button>
               </div>
+            </div>
 
-              <div class="mt-2 text-xs text-gray-500">Tip: click "Open" to load a file into the workspace; use the
-                checkbox to mark it for batch operations.</div>
+            <div id="uploadedFilesExplorerList" class="mt-2 space-y-1 max-h-40 overflow-auto">
+              <!-- items rendered dynamically from the (hidden) select below -->
+              <div class="text-xs text-gray-400 italic">No uploaded files yet.</div>
+            </div>
 
-              <!-- Hidden legacy select (kept for existing JS compatibility). The visible explorer mirrors this. -->
-              <select id="uploadedFilesSelect" class="hidden" aria-hidden="true">
-                <option value="">-- Select uploaded file --</option>
-              </select>
+            <div class="mt-2 text-xs text-gray-500">Tip: click "Open" to load a file into the workspace; use the
+              checkbox to mark it for batch operations.</div>
 
-              <script>
-                // Render/bridge code that mirrors options in the hidden select into a VS Code-style explorer.
-                document.addEventListener('DOMContentLoaded', () => {
-                  const sel = document.getElementById('uploadedFilesSelect');
-                  const list = document.getElementById('uploadedFilesExplorerList');
-                  const toggle = document.getElementById('explorerToggle');
-                  const count = document.getElementById('uploadedFilesCount');
+            <!-- Hidden legacy select (kept for existing JS compatibility). The visible explorer mirrors this. -->
+            <select id="uploadedFilesSelect" class="hidden" aria-hidden="true">
+              <option value="">-- Select uploaded file --</option>
+            </select>
 
-                  function makeItem(opt) {
-                    const serverName = opt.value;
-                    if (!serverName) return null;
-                    // try to find richer metadata from global uploadedFiles (populated by main script)
-                    const meta = (window.uploadedFiles || []).find(f => f.serverName === serverName) || {};
-                    const label = meta.clientName || opt.text || serverName;
+            <script>
+              // Render/bridge code that mirrors options in the hidden select into a VS Code-style explorer.
+              document.addEventListener('DOMContentLoaded', () => {
+                const sel = document.getElementById('uploadedFilesSelect');
+                const list = document.getElementById('uploadedFilesExplorerList');
+                const toggle = document.getElementById('explorerToggle');
+                const count = document.getElementById('uploadedFilesCount');
 
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'flex items-center justify-between p-2 rounded hover:bg-gray-50';
-                    wrapper.innerHTML = `
+                function makeItem(opt) {
+                  const serverName = opt.value;
+                  if (!serverName) return null;
+                  // try to find richer metadata from global uploadedFiles (populated by main script)
+                  const meta = (window.uploadedFiles || []).find(f => f.serverName === serverName) || {};
+                  const label = meta.clientName || opt.text || serverName;
+
+                  const wrapper = document.createElement('div');
+                  wrapper.className = 'flex items-center justify-between p-2 rounded hover:bg-gray-50';
+                  wrapper.innerHTML = `
                       <div class="flex items-center space-x-2">
                         <input type="checkbox" class="explorer-file-checkbox" data-server="${serverName}" aria-label="Select ${label}" />
                         <div class="flex flex-col">
@@ -355,125 +784,124 @@
                         <button class="preview-file-btn text-xs px-2 py-1 bg-white border rounded text-gray-600" data-server="${serverName}">Preview</button>
                       </div>
                     `;
-                    return wrapper;
+                  return wrapper;
+                }
+
+                function render() {
+                  // clear and rebuild from select options (keeps single source of truth)
+                  list.innerHTML = '';
+                  const opts = Array.from(sel.options || []).filter(o => o.value);
+                  if (!opts.length) {
+                    list.innerHTML = '<div class="text-xs text-gray-400 italic">No uploaded files yet.</div>';
+                    count.innerText = '0';
+                    return;
                   }
-
-                  function render() {
-                    // clear and rebuild from select options (keeps single source of truth)
-                    list.innerHTML = '';
-                    const opts = Array.from(sel.options || []).filter(o => o.value);
-                    if (!opts.length) {
-                      list.innerHTML = '<div class="text-xs text-gray-400 italic">No uploaded files yet.</div>';
-                      count.innerText = '0';
-                      return;
-                    }
-                    opts.forEach(o => {
-                      const item = makeItem(o);
-                      if (item) list.appendChild(item);
-                    });
-                    count.innerText = String(opts.length);
-                  }
-
-                  // observe changes to the hidden select (updateUploadedFilesSelect writes here)
-                  const mo = new MutationObserver(render);
-                  mo.observe(sel, { childList: true, subtree: false });
-
-                  // also run once on load
-                  render();
-
-                  // toggle collapse
-                  toggle.addEventListener('click', () => {
-                    const hidden = list.classList.toggle('hidden');
-                    toggle.innerText = hidden ? '+' : '−';
-                    toggle.setAttribute('aria-expanded', String(!hidden));
+                  opts.forEach(o => {
+                    const item = makeItem(o);
+                    if (item) list.appendChild(item);
                   });
+                  count.innerText = String(opts.length);
+                }
 
-                  // delegate clicks inside the explorer list
-                  list.addEventListener('click', (ev) => {
-                    const openBtn = ev.target.closest('.open-file-btn');
-                    if (openBtn) {
-                      const server = openBtn.getAttribute('data-server');
-                      if (server) {
-                        // set hidden select value to trigger existing change handler
-                        sel.value = server;
-                        sel.dispatchEvent(new Event('change', { bubbles: true }));
-                      }
-                      return;
-                    }
-                    const previewBtn = ev.target.closest('.preview-file-btn');
-                    if (previewBtn) {
-                      const server = previewBtn.getAttribute('data-server');
-                      if (server) {
-                        // try to find metadata to know pages; fallback to last-known uploadedFiles entry
-                        const meta = (window.uploadedFiles || []).find(f => f.serverName === server);
-                        const pages = (meta && meta.total_pages) || meta && meta.total_pages || 1;
-                        try {
-                          // call existing loader functions if available
-                          if (typeof loadThumbnails === 'function') {
-                            loadThumbnails((typeof uploadsPreviewBase !== 'undefined' ? uploadsPreviewBase : '') + server, pages);
-                          }
-                          if (typeof loadPages === 'function' && meta && meta.total_pages) {
-                            loadPages(meta.total_pages);
-                            // mark as active filename
-                            window.uploadedFilename = server;
-                            const nameEl = document.getElementById('uploadedName');
-                            if (nameEl && meta.clientName) nameEl.innerText = meta.clientName;
-                          }
-                        } catch (e) { /* non-fatal */ }
-                      }
-                      return;
-                    }
-                    const checkbox = ev.target.closest('.explorer-file-checkbox');
-                    if (checkbox) {
-                      // delegate: toggling these checkboxes is purely UI for batch selection.
-                      // You can read selected servers via document.querySelectorAll('.explorer-file-checkbox:checked')
-                    }
-                  });
+                // observe changes to the hidden select (updateUploadedFilesSelect writes here)
+                const mo = new MutationObserver(render);
+                mo.observe(sel, { childList: true, subtree: false });
+
+                // also run once on load
+                render();
+
+                // toggle collapse
+                toggle.addEventListener('click', () => {
+                  const hidden = list.classList.toggle('hidden');
+                  toggle.innerText = hidden ? '+' : '−';
+                  toggle.setAttribute('aria-expanded', String(!hidden));
                 });
-              </script>
-            </div>
+
+                // delegate clicks inside the explorer list
+                list.addEventListener('click', (ev) => {
+                  const openBtn = ev.target.closest('.open-file-btn');
+                  if (openBtn) {
+                    const server = openBtn.getAttribute('data-server');
+                    if (server) {
+                      // set hidden select value to trigger existing change handler
+                      sel.value = server;
+                      sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                    return;
+                  }
+                  const previewBtn = ev.target.closest('.preview-file-btn');
+                  if (previewBtn) {
+                    const server = previewBtn.getAttribute('data-server');
+                    if (server) {
+                      // try to find metadata to know pages; fallback to last-known uploadedFiles entry
+                      const meta = (window.uploadedFiles || []).find(f => f.serverName === server);
+                      const pages = (meta && meta.total_pages) || meta && meta.total_pages || 1;
+                      try {
+                        // call existing loader functions if available
+                        if (typeof loadThumbnails === 'function') {
+                          loadThumbnails((typeof uploadsPreviewBase !== 'undefined' ? uploadsPreviewBase : '') + server, pages);
+                        }
+                        if (typeof loadPages === 'function' && meta && meta.total_pages) {
+                          loadPages(meta.total_pages);
+                          // mark as active filename
+                          window.uploadedFilename = server;
+                          const nameEl = document.getElementById('uploadedName');
+                          if (nameEl && meta.clientName) nameEl.innerText = meta.clientName;
+                        }
+                      } catch (e) { /* non-fatal */ }
+                    }
+                    return;
+                  }
+                  const checkbox = ev.target.closest('.explorer-file-checkbox');
+                  if (checkbox) {
+                    // delegate: toggling these checkboxes is purely UI for batch selection.
+                    // You can read selected servers via document.querySelectorAll('.explorer-file-checkbox:checked')
+                  }
+                });
+              });
+            </script>
           </div>
-          <div id="pagesList" class="border border-gray-200 rounded-md p-2 h-64 overflow-auto bg-gray-50"></div>
-        </section>
+        </div>
+        <div id="pagesList" class="border border-gray-200 rounded-md p-2 h-64 overflow-auto bg-gray-50"></div>
+      </section>
 
-        <!-- Center column: Upload area and Thumbnails preview -->
-        <section class="md:col-span-6 bg-white rounded-lg p-4 shadow-sm">
-          <div class="flex items-center justify-between mb-3">
+      <!-- Center column: Upload area and Thumbnails preview -->
+      <section class="md:col-span-6 bg-white rounded-lg p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
 
-            <div class="text-sm text-gray-500">Preview Thumbnails</div>
-          </div>
-          <div id="thumbs"
-            class="rounded-md border border-gray-100 p-2 h-80 overflow-auto bg-white grid grid-cols-2 sm:grid-cols-3 gap-2">
-          </div>
-        </section>
+          <div class="text-sm text-gray-500">Preview Thumbnails</div>
+        </div>
+        <div id="thumbs"
+          class="rounded-md border border-gray-100 p-2 h-80 overflow-auto bg-white grid grid-cols-2 sm:grid-cols-3 gap-2">
+        </div>
+      </section>
 
-        <!-- Right column: Generated files list and action controls (export, rotate input) -->
-        <section class="md:col-span-3 bg-white rounded-lg p-4 shadow-sm">
-          <h3 class="font-semibold mb-3">Generated / Actions</h3>
-          <ul id="generatedList" class="space-y-2 text-sm"></ul>
+      <!-- Right column: Generated files list and action controls (export, rotate input) -->
+      <section class="md:col-span-3 bg-white rounded-lg p-4 shadow-sm">
+        <h3 class="font-semibold mb-3">Generated / Actions</h3>
+        <ul id="generatedList" class="space-y-2 text-sm"></ul>
 
-          <div id="compressInfo" class="mt-3 text-sm text-gray-600 hidden">
-            <div>Original size: <span id="origSize">-</span></div>
-            <div>Estimated compressed size: <span id="estSize">-</span></div>
-          </div>
+        <div id="compressInfo" class="mt-3 text-sm text-gray-600 hidden">
+          <div>Original size: <span id="origSize">-</span></div>
+          <div>Estimated compressed size: <span id="estSize">-</span></div>
+        </div>
 
-          <div class="mt-4 space-y-2">
-            <button id="pdfToWordBtn"
-              class="w-full inline-flex justify-center items-center px-3 py-2 bg-white border rounded-md text-sm">Export
-              Selected → Word</button>
-            <button id="pdfToExcelBtn"
-              class="w-full inline-flex justify-center items-center px-3 py-2 bg-white border rounded-md text-sm">Export
-              Selected → Excel</button>
-          </div>
+        <div class="mt-4 space-y-2">
+          <button id="pdfToWordBtn"
+            class="w-full inline-flex justify-center items-center px-3 py-2 bg-white border rounded-md text-sm">Export
+            Selected → Word</button>
+          <button id="pdfToExcelBtn"
+            class="w-full inline-flex justify-center items-center px-3 py-2 bg-white border rounded-md text-sm">Export
+            Selected → Excel</button>
+        </div>
 
-          <div class="mt-4 text-xs text-gray-500">Rotate by page numbers (e.g. <code>1,3,5-7</code>) or use per-page
-            buttons.</div>
-          <input id="rotatePagesInput" class="mt-2 block w-full text-sm border rounded-md p-2"
-            placeholder="e.g. 1,3,5-7">
-        </section>
-      </div>
+        <div class="mt-4 text-xs text-gray-500">Rotate by page numbers (e.g. <code>1,3,5-7</code>) or use per-page
+          buttons.</div>
+        <input id="rotatePagesInput" class="mt-2 block w-full text-sm border rounded-md p-2" placeholder="e.g. 1,3,5-7">
+      </section>
+    </div>
 
-      
+
     </div>
 
     <footer role="contentinfo" class="mt-6 py-6 text-center text-sm text-gray-600">
@@ -741,36 +1169,26 @@
       return actions;
     }
 
-    // Wire toolbox buttons to toggle hidden checkboxes
-    document.querySelectorAll('.tool-btn').forEach(btn => {
-      btn.addEventListener('click', function () {
-        const action = this.getAttribute('data-action');
-        if (!action) return;
-        const checkbox = Array.from(document.querySelectorAll('.action-checkbox')).find(n => n.value === action);
-        if (!checkbox) return;
-        checkbox.checked = !checkbox.checked;
-        // toggle active style
-        this.classList.toggle('bg-red-50');
-        this.classList.toggle('border-red-300');
-        updateCompressInfo();
-      });
-    });
 
     function updateCompressInfo() {
       const compressChecked = Array.from(document.querySelectorAll('.action-checkbox')).some(n => n.value === 'compress' && n.checked);
       const info = document.getElementById('compressInfo');
       const orig = document.getElementById('origSize');
       const est = document.getElementById('estSize');
+      const levelEl = document.getElementById('compressLevelSelect');
       if (!info || !orig || !est) return;
       if (!compressChecked) { info.classList.add('hidden'); return; }
-      // find active file
+      // find active file (prefer explicit uploadedFilename, fallback to last uploaded)
       const active = uploadedFiles.find(x => x.serverName === uploadedFilename) || uploadedFiles[uploadedFiles.length - 1];
       if (!active) { info.classList.add('hidden'); return; }
       info.classList.remove('hidden');
       orig.innerText = `${Math.round(active.size / 1024)} KB`;
-      // heuristic estimate: show 60% of original
-      const estimated = Math.round(active.size * 0.6 / 1024);
-      est.innerText = `${estimated} KB (~60%)`;
+      // heuristic estimate based on chosen compression level
+      const level = (levelEl && levelEl.value) ? levelEl.value : 'default';
+      const ratioMap = { 'none': 1.0, 'fast': 0.8, 'default': 0.6, 'best': 0.45 };
+      const ratio = ratioMap[level] || 0.6;
+      const estimated = Math.max(1, Math.round(active.size * ratio / 1024));
+      est.innerText = `${estimated} KB (~${Math.round(ratio * 100)}%)`;
     }
 
     // parsePagesInput(str): helper to parse page range strings like
@@ -893,7 +1311,8 @@
     // produced filenames which are shown in the UI.
     document.getElementById('generateBtn').addEventListener('click', async () => {
       const actions = getCheckedActions();
-      if (!uploadedFilename) { alert('Please upload a PDF first'); return; }
+      const explorerSelected = Array.from(document.querySelectorAll('.explorer-file-checkbox:checked')).map(n => n.getAttribute('data-server'));
+      if (!uploadedFilename && explorerSelected.length === 0) { alert('Please upload a PDF first or select files from the Uploaded Files explorer'); return; }
       if (actions.length === 0) { alert('Select at least one action'); return; }
 
       const rotatePagesInput = document.getElementById('rotatePagesInput').value;
@@ -911,7 +1330,18 @@
         });
       }
 
-      const payload = { filename: uploadedFilename, actions: actions, pages: selectedPages, rotations: rotations };
+      // build payload: support batch compression (filenames) and include chosen compression level
+      const payload = { actions: actions, pages: selectedPages, rotations: rotations };
+      const compressSelected = actions.includes('compress');
+      const compressLevel = (document.getElementById('compressLevelSelect') && document.getElementById('compressLevelSelect').value) || 'default';
+      if (compressSelected && explorerSelected.length > 0) {
+        payload.filenames = explorerSelected;
+        payload.compression_level = compressLevel;
+      } else {
+        // default single-file workflows continue to use 'filename'
+        payload.filename = uploadedFilename;
+        if (compressSelected) payload.compression_level = compressLevel;
+      }
 
       const resp = await fetch(processUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await resp.json();

@@ -77,13 +77,22 @@ def smart_process():
     except Exception:  # pragma: no cover - request validation
         return jsonify({"error": "Invalid request payload"}), 400
 
-    filename = payload.get("filename")
+    # filename = payload.get("filename")
+    filenames = payload.get("filenames")
     actions = set(payload.get("actions", []))
     pages = _as_int_list(payload.get("pages", []))
     rotations = _as_rotation_map(payload.get("rotations", {}))
 
-    if not filename:
-        return jsonify({"error": "missing filename"}), 400
+    # Optional: support batch operations (list of filenames) and a client-chosen compression level
+    compression_level = payload.get("compression_level", "default")
+
+    # Expect `filenames` to be a list (batch operations). Use the first entry
+    # as the primary input for single-file operations (rotate/remove/merge/split).
+    if not isinstance(filenames, list) or len(filenames) == 0:
+        return jsonify({"error": "missing filename(s)"}), 400
+
+    # Primary filename for single-input operations
+    filename = filenames[0]
 
     input_path = resolve_upload_path(filename)
     if input_path is None or not input_path.exists():
@@ -131,10 +140,25 @@ def smart_process():
             LOGGER.exception("Split failed: %s", exc)
 
     if "compress" in actions and not split_performed:
-        compressed_path = output_dir / timestamped_name("compressed", ".pdf")
+        # If the client provided a list of filenames, compress each input in the batch
         try:
-            pdf_service.compress_pdf(working_path, compressed_path)
-            working_path = compressed_path
+            if isinstance(filenames, list) and filenames:
+                for fn in filenames:
+                    in_path = resolve_upload_path(fn)
+                    if in_path is None or not in_path.exists():
+                        LOGGER.warning("Batch compress: input not found %s", fn)
+                        continue
+                    compressed_path = output_dir / timestamped_name("compressed", ".pdf")
+                    try:
+                        pdf_service.compress_pdf(in_path, compressed_path, quality=compression_level)
+                        # copy compressed output to saved folder and record
+                        generated.extend(pdf_service.copy_outputs_to_saved([compressed_path], saved_dir))
+                    except Exception as exc:  # pragma: no cover - service level logging handles
+                        LOGGER.exception("Compress failed for %s: %s", fn, exc)
+            else:
+                compressed_path = output_dir / timestamped_name("compressed", ".pdf")
+                pdf_service.compress_pdf(working_path, compressed_path, quality=compression_level)
+                working_path = compressed_path
         except Exception as exc:
             LOGGER.exception("Compress failed: %s", exc)
 
