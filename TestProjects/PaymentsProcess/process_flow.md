@@ -33,6 +33,7 @@ Why it matters: A clear, validated, and dry-run–first process reduces payment 
 - Provide a precise, reproducible specification for PaymentEvent processing across Dry Run and Final (Production) stages.
 - Preserve and clarify business logic and data-model specifics for PaymentEvent, PaymentCenter, claims, and payment calculations.
 - Define validations, outputs, and performance strategies with clear responsibilities and failure modes.
+ - Standardize connection handling: use a single DB connection string (db_uri) for all fetch and update operations across the run.
 
 ## Terminology / Glossary
 
@@ -103,14 +104,14 @@ flowchart TD
 Goal: Execute a safe, repeatable Dry Run to estimate payments, validate data integrity, and surface issues before the Final Run. Calculations are at the claim level; no production collections are mutated except WS collections.
 
 1. Initialize PaymentEventStats with status = Started.
-2. Retrieve PaymentEvent configuration by PaymentEvent_ID (includes type: 'Provider' or 'DMR').
+2. Retrieve PaymentEvent configuration by PaymentEvent_ID (includes type: 'Provider' or 'DMR') using the central `db_uri`.
 3. Validate PaymentCenter:
      - Derive the unique set of PaymentCenters from ClaimWSCore using the configured type (TaxID+NPI or MemberID).
      - For existing PaymentCenters in PaymentCenter, copy to PaymentCenterWS and flag as OLD.
      - For missing PaymentCenters, create in PaymentCenterWS and flag as NEW (for data validation).
 4. Create PaymentCenter (optional safeguard): If Create Payment Center wasn’t run or claims were added later, ensure any remaining missing PaymentCenters are created in PaymentCenterWS.
 5. Claim retrieval and transformation:
-     - Fetch claims from ClaimWSCore and transform into PaymentCenterClaims (see ClaimTransformation below).
+    - Fetch claims from ClaimWSCore (passing `db_uri`) and transform into PaymentCenterClaims (see ClaimTransformation below).
 6. Over/Under preparation:
      - Aggregate OverAndUnderPayment from previous cycles into OverAndUnderPayment_STG.
      - Attach PC-level O/U summaries into PaymentCenterClaims for estimation.
@@ -135,7 +136,7 @@ Expected outputs:
 
 Goal: Execute the production run with service-line level calculations that roll up to claims, apply over/under offsets, and persist production results. Includes backups and stricter validations.
 
-1. Retrieve PaymentEvent configuration by PaymentEvent_ID (same fields as Dry Run plus current Stage enforcement).
+1. Retrieve PaymentEvent configuration by PaymentEvent_ID (same fields as Dry Run plus current Stage enforcement) using the central `db_uri`.
 2. Initial data validation and refresh:
      - Refresh reference collections: ProcessCodeEx, ServiceCode.
      - Back up collections: PaymentCenter, ClaimFinCore, OverAndUnderPayment, SequenceNumbers.
@@ -146,11 +147,11 @@ Goal: Execute the production run with service-line level calculations that roll 
 5. Validate SequenceNumbers:
      - Compare sequence values referenced by PaymentCenter and OverAndUnderPayment against SequenceNumbers collection.
 6. Claim retrieval and transformation:
-     - Fetch claims from ClaimFinCore; build PaymentCenterClaims.
+    - Fetch claims from ClaimFinCore (passing `db_uri`); build PaymentCenterClaims.
 7. PaymentCenter processing:
-     - Create any missing PaymentCenters (ensure none were created between validation and creation); update PaymentCenterClaims with new PaymentCenter_ID where applicable.
+    - Create any missing PaymentCenters (using `db_uri`, ensure none were created between validation and creation); update PaymentCenterClaims with new PaymentCenter_ID where applicable.
 8. Calculate OverAndUnderPayment:
-     - Compute O/U for the current cycle and persist to OverAndUnderPayment; use OverAndUnderPayment_STG for pre-calculations.
+    - Compute O/U for the current cycle and persist to OverAndUnderPayment (using `db_uri`); use OverAndUnderPayment_STG for pre-calculations.
 9. PaymentInfo processing:
      - For each claim, process each service line, compute amounts, then update aggregates at the claim header level.
 10. Final Data Validation:
@@ -326,6 +327,7 @@ Project skeleton (recommended):
 
 ```sh
 PaymentProcess/
+├── argument.py                   # CLI parser (accepts --db-uri)
 ├── core/
 │   ├── payment_processor.py       # Main payment processing logic
 │   ├── validation.py              # Data validation module
@@ -344,6 +346,8 @@ PaymentProcess/
 │   │   └── payment_center_repo.py # Payment center operations
 │   └── config/                    # Configuration management
 │       └── config_loader.py       # Load and validate configs
+├── common/
+│   └── functions.py               # Env and connection helpers (resolve db_uri, singleton connection)
 ├── processing/
 │   ├── parallel/                  # Parallel processing utilities
 │   │   ├── multiprocessing.py     # Process pool implementation
@@ -368,6 +372,12 @@ Notes:
 - Add unit tests for claim validation, PaymentCenter creation, O/U application, and service-line aggregation.
 - Add integration tests for end-to-end Dry Run and Final Run on synthetic datasets.
 
+## Connection management
+
+- Use a single database connection string (`db_uri`) for the entire run, provided via CLI `--db-uri` or environment `PAYMENT_DB_URI`.
+- All repository fetch and update operations should accept `db_uri` explicitly to ensure they use the same connection/pool.
+- `common/functions.py` should expose helpers to resolve `db_uri` and construct a process-wide singleton client for reuse.
+
 ## Runbook / Quick start
 
 Preconditions (Final Run only): Ensure backups are taken for PaymentCenter, ClaimFinCore, OverAndUnderPayment, and SequenceNumbers.
@@ -377,6 +387,7 @@ How to run a Dry Run (Estimate):
 1. Confirm PaymentEvent exists and has correct PaymentEventType and Stage.
 2. Prepare ClaimWSCore for the current cycle.
 3. Initialize PaymentEventStats (status = Started).
+4. Ensure a `db_uri` is available via CLI `--db-uri` or environment `PAYMENT_DB_URI`; the process will use this single connection for all reads/writes.
 4. Validate/prepare PaymentCenterWS (copy existing as OLD; create missing as NEW).
 5. Run ClaimTransformation on ClaimWSCore; attach O/U context from OverAndUnderPayment_STG.
 6. Execute Estimate Payment Amounts at claim level.
@@ -385,14 +396,15 @@ How to run a Dry Run (Estimate):
 
 How to run the Final Run (Production):
 
-1. Back up PaymentCenter, ClaimFinCore, OverAndUnderPayment, and SequenceNumbers.
-2. Refresh ProcessCodeEx and ServiceCode references.
-3. Validate PaymentCenter and ClaimFinCore; ensure SequenceNumbers alignment.
-4. Create missing PaymentCenters in production if required.
-5. Run ClaimTransformation on ClaimFinCore; update PaymentCenterClaims with new IDs.
-6. Calculate OverAndUnderPayment for the cycle; apply offsets per rules.
-7. Execute PaymentInfo: service-line calculations, then claim aggregates.
-8. Run final validation; update PaymentEventStats; archive run artifacts.
+1. Ensure `db_uri` is set (CLI or env) and the process initializes a single shared connection.
+2. Back up PaymentCenter, ClaimFinCore, OverAndUnderPayment, and SequenceNumbers.
+3. Refresh ProcessCodeEx and ServiceCode references.
+4. Validate PaymentCenter and ClaimFinCore; ensure SequenceNumbers alignment.
+5. Create missing PaymentCenters in production if required.
+6. Run ClaimTransformation on ClaimFinCore; update PaymentCenterClaims with new IDs.
+7. Calculate OverAndUnderPayment for the cycle; apply offsets per rules.
+8. Execute PaymentInfo: service-line calculations, then claim aggregates.
+9. Run final validation; update PaymentEventStats; archive run artifacts.
 
 Expected artifacts:
 

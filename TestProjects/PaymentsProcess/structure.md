@@ -15,8 +15,9 @@ This document defines the concrete folder and file structure for the PaymentProc
 
 ## Folder tree
 
-```text
+```sh
 PaymentProcess/
+├── argument.py                   # CLI argument parsing (db-uri, workers, etc.)
 ├── core/
 │   ├── payment_processor.py       # Orchestrates Dry Run and Final Run
 │   ├── validation.py              # Validations and checks (critical/warn/info)
@@ -37,6 +38,8 @@ PaymentProcess/
 │   │   └── payment_center_repo.py # PaymentCenter WS/prod management
 │   └── config/
 │       └── config_loader.py       # Load/validate run configuration
+├── common/
+│   └── functions.py               # Shared helpers (env, db-uri resolve, singleton connection)
 ├── processing/
 │   ├── parallel/
 │   │   ├── multiprocessing.py     # Process pool helpers for PCs/claims/lines
@@ -84,6 +87,19 @@ PaymentProcess/
   - `--resume` (flag to resume a failed run where safe)
   - `--pc-type` (choices: `provider`, `dmr`, optional to override config)
   - `--validate-only` (flag to run validations without calculations)
+ - Notes:
+   - The `--db-uri` (or `PAYMENT_DB_URI`) provides the single connection string used across all fetch and update operations in the run.
+
+### `common/functions.py`
+- Responsibility: Central helpers for environment and connection handling.
+- Public functions (suggested):
+  - `get_env(name: str, default: str | None = None) -> str | None`
+  - `get_default_workers() -> int` (uses env or CPU count heuristic)
+  - `resolve_db_uri(cli_value: str | None) -> str` (CLI arg or `PAYMENT_DB_URI`; raises if missing)
+  - `get_connection(db_uri: str)` (returns a process-wide singleton client/connection or pool)
+  - `close_connection() -> None` (optional cleanup hook)
+ - Behavior:
+  - Ensure one main connection is created and reused throughout the process lifecycle.
 
 ### `__init__.py` files
 - At `PaymentProcess/__init__.py`:
@@ -119,6 +135,9 @@ PaymentProcess/
 - Standalone helper functions (optional):
   - `now_utc() -> datetime`
   - `stage_label(mode: RunMode) -> str`
+
+- Types:
+  - `RunSettings` (dataclass): `db_uri: str`, `workers: int`, `batch_size: int`, `log_level: str`
 
 ### `core/validation.py`
 - Class: `Validation`
@@ -209,35 +228,43 @@ PaymentProcess/
 ### `data/repositories/claim_repository.py`
 - Class: `ClaimRepository`
   - Methods:
-    - `fetch_ws(self, payment_event_id: str, projection: Projection | None = None) -> Iterable[Claim]`
-    - `fetch_fin(self, payment_event_id: str, projection: Projection | None = None) -> Iterable[Claim]`
-    - `backup(self) -> BackupRef`
+    - `fetch_ws(self, payment_event_id: str, db_uri: str, projection: Projection | None = None) -> Iterable[Claim]`
+    - `fetch_fin(self, payment_event_id: str, db_uri: str, projection: Projection | None = None) -> Iterable[Claim]`
+    - `backup(self, db_uri: str) -> BackupRef`
+  - Notes:
+    - All fetch operations require the central `db_uri` so the same connection/pool is used consistently.
 
 ### `data/repositories/payment_repository.py`
 - Class: `PaymentRepository`
   - Methods:
-    - `persist_service_line(self, payment: ServiceLinePayment) -> None`
-    - `persist_claim_aggregate(self, payment: ClaimPayment) -> None`
-    - `calc_and_upsert_over_under(self, pe_id: str, pc_id: int, records: list[OverUnderRecord]) -> None`
-    - `backup(self) -> BackupRef`
+    - `persist_service_line(self, payment: ServiceLinePayment, db_uri: str) -> None`
+    - `persist_claim_aggregate(self, payment: ClaimPayment, db_uri: str) -> None`
+    - `calc_and_upsert_over_under(self, pe_id: str, pc_id: int, records: list[OverUnderRecord], db_uri: str) -> None`
+    - `backup(self, db_uri: str) -> BackupRef`
+  - Notes:
+    - Update and insert operations take `db_uri` explicitly to ensure single-connection usage across the run.
 
 ### `data/repositories/payment_center_repo.py`
 - Class: `PaymentCenterRepository`
   - Methods:
-    - `copy_to_ws(self, pc_ids: list[int]) -> None`
-    - `create_ws(self, missing_keys: list[str]) -> CreatedWS`
-    - `create_prod_if_missing(self, ws_created: CreatedWS) -> CreatedProd`
-    - `get_cache(self, keys: list[str]) -> PaymentCenterCache`
-    - `backup(self) -> BackupRef`
+    - `copy_to_ws(self, pc_ids: list[int], db_uri: str) -> None`
+    - `create_ws(self, missing_keys: list[str], db_uri: str) -> CreatedWS`
+    - `create_prod_if_missing(self, ws_created: CreatedWS, db_uri: str) -> CreatedProd`
+    - `get_cache(self, keys: list[str], db_uri: str) -> PaymentCenterCache`
+    - `backup(self, db_uri: str) -> BackupRef`
+  - Notes:
+    - Repository methods consistently receive `db_uri` to use the shared connection/pool.
 
 ### `data/config/config_loader.py`
 - Class: `ConfigLoader`
   - Methods:
-    - `load_payment_event(self, payment_event_id: str) -> PaymentEvent`
-    - `load_interest_config(self, pe: PaymentEvent) -> InterestRules`
-    - `load_funding_source(self, pe: PaymentEvent) -> FundingSource`
-    - `load_inclusion_criteria(self, pe: PaymentEvent) -> InclusionCriteria`
+    - `load_payment_event(self, payment_event_id: str, db_uri: str) -> PaymentEvent`
+    - `load_interest_config(self, pe: PaymentEvent, db_uri: str) -> InterestRules`
+    - `load_funding_source(self, pe: PaymentEvent, db_uri: str) -> FundingSource`
+    - `load_inclusion_criteria(self, pe: PaymentEvent, db_uri: str) -> InclusionCriteria`
     - `validate(self, pe: PaymentEvent) -> None`
+  - Notes:
+    - Config retrieval methods accept `db_uri` to read from the same connection context.
 
 
 ### `processing/parallel/multiprocessing.py`
@@ -333,8 +360,9 @@ PaymentProcess/
 - `main.py`:
   1. Parse args via `argument.py`.
   2. Configure logging (`utils.logging.configure_logging`).
-  3. Build repositories and config loader.
-  4. Instantiate `PaymentProcessor`.
+  3. Resolve a single `db_uri` (from `--db-uri` or `PAYMENT_DB_URI`) and create/retrieve the process-wide connection via `common.functions.get_connection(db_uri)`.
+  4. Build repositories and config loader (pass `db_uri` to fetch/update operations).
+  5. Instantiate `PaymentProcessor` with `RunSettings(db_uri=..., workers=..., batch_size=..., log_level=...)`.
   5. Dispatch based on `--mode`:
      - `dry-run` -> `PaymentProcessor.run_dry_run(pe_id)`
      - `final` -> `PaymentProcessor.run_final_run(pe_id)`
@@ -344,6 +372,7 @@ PaymentProcess/
   - `--payment-event-id` must be non-empty.
   - `--mode` required and in {dry-run, final}.
   - `--workers`, `--batch-size` > 0.
+  - If `--db-uri` is omitted, `PAYMENT_DB_URI` must be set; otherwise exit with an error.
   - If `--validate-only` then skip calculation steps.
 
 
