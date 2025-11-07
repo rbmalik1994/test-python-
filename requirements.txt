@@ -9,3 +9,4 @@ pikepdf
 pdfplumber
 pandas
 PyMuPDF
+pydantic>=2.6,<3
