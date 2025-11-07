@@ -330,6 +330,96 @@ PaymentProcess/
 - `PaymentCenterType = {PROVIDER, DMR}`
 - `ClaimType`, `ClaimStatus`, `FrequencyCode`
 
+### Environment file layout and repository template
+
+- Repository template: include a committed `.env.template` at the repository root (next to `README.md` and `requirements.txt`). This file is a *template only* and must not contain real secrets. It documents all environment variables expected by the application and provides safe example values for local development.
+- Real environment files (`.env`) should never be committed. Add `.env` to `.gitignore` so developers don't accidentally push secrets.
+- Purpose & placement per environment:
+  - Local / developer: copy `.env.template` -> `.env` in the repo root for local runs.
+  - systemd / VM: store environment in `/etc/paymentprocess/env` (owned by the service account) and reference it from the unit file with `EnvironmentFile=`.
+  - Docker Compose: place a `.env` next to `docker-compose.yml` on the host (do not bake secrets into images). Use compose `secrets` for sensitive values where supported.
+  - Kubernetes: use `Secrets` for sensitive values and `ConfigMap` for non-sensitive configuration. Mount them as environment variables in the Pod spec instead of using plaintext files inside images.
+
+Example `.env.template` (commit this file; copy to `.env` and edit for local dev):
+
+```env
+# Copy this file to `.env` and fill in secrets for local development only.
+PAYMENT_DB_URI=mongodb://username:password@localhost:27017/payments
+PAYMENT_LOG_LEVEL=INFO
+PAYMENT_CONFIG_PATH=./config/payment_config.yml
+PAYMENT_MAX_WORKERS=4
+PAYMENT_BATCH_SIZE=1000
+PAYMENT_SEQ_CHUNK_SIZE=5000
+PAYMENT_LOG_DIR=/var/log/paymentprocess
+# Optional: runtime-specific overrides
+PAYMENT_EVENT_ID=
+# Do NOT add production secrets to this template file.
+```
+
+Notes for `.gitignore`:
+
+- Add an entry for `.env` to prevent accidental commits. Example entry to add to the repo-level `.gitignore`:
+
+```
+# Local env files
+.env
+```
+
+### Log files and directory structure
+
+- Recommended OS path: `/var/log/paymentprocess/` — application writes logs here by default when running as a service. Use `PAYMENT_LOG_DIR` to override in non-root or containerized environments.
+- Ownership and permissions: create the directory and set owner to the service user (for example `paymentuser:paymentuser`) and mode `750` so only the service and admin users can read logs:
+
+```
+sudo mkdir -p /var/log/paymentprocess
+sudo chown paymentuser:paymentuser /var/log/paymentprocess
+sudo chmod 750 /var/log/paymentprocess
+```
+
+- Log rotation: add a `logrotate` config at `/etc/logrotate.d/paymentprocess` to rotate and compress logs. Example config:
+
+```
+/var/log/paymentprocess/*.log {
+    daily
+    rotate 14
+    compress
+    missingok
+    notifempty
+    create 0640 paymentuser paymentuser
+    sharedscripts
+    postrotate
+        systemctl reload paymentprocess.service > /dev/null 2>/dev/null || true
+    endscript
+}
+```
+
+- systemd unit snippet (service should read env from `/etc/paymentprocess/env`):
+
+```ini
+[Unit]
+Description=PaymentProcess service
+After=network.target
+
+[Service]
+User=paymentuser
+EnvironmentFile=/etc/paymentprocess/env
+WorkingDirectory=/opt/paymentprocess
+ExecStart=/usr/bin/python -m PaymentProcess.main --mode final --payment-event-id $PAYMENT_EVENT_ID
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+- Docker / Compose guidance:
+  - Place a `.env` next to `docker-compose.yml` on the host; do not commit it.
+  - For secrets, use Docker Secrets or a secrets manager and mount them at runtime.
+
+- Kubernetes guidance:
+  - Use `kubectl create secret generic ...` (or a sealed/secrets-manager-backed flow) for DB credentials and other sensitive items.
+  - Map secrets/configmaps into the pod's `env` section so the container reads values from the environment rather than a file on disk.
+
+
 
 ## What goes in each __init__
 
