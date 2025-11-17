@@ -9,6 +9,7 @@ validation and configuration wiring.
 from __future__ import annotations
 
 import argparse
+import os
 from typing import Iterable, Sequence
 
 
@@ -145,7 +146,9 @@ def validate_args(ns: argparse.Namespace, required_env: Iterable[str] | None = N
 
     missing_env: list[str] = []
     if required_env:
-        missing_env.extend(env for env in required_env)
+        for env_var in required_env:
+            if not os.environ.get(env_var):
+                missing_env.append(env_var)
 
     if missing_env:
         raise ValueError(

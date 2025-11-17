@@ -11,7 +11,8 @@ from typing import Iterable
 
 from . import PaymentProcessor
 from .argument import parse_args, validate_args
-from .common.functions import close_connection, get_connection, resolve_db_uri
+from .utils.load_env import get_env_config
+from .utils.mongo_db import close_mongo_client, get_mongo_client
 from .utils.logging import configure_logging
 
 
@@ -35,13 +36,17 @@ def main(argv: Iterable[str] | None = None) -> int:
         should convert raised exceptions into appropriate exit codes.
     """
 
+    env_config = get_env_config()
+
     args = parse_args(list(argv) if argv is not None else None)
     validate_args(args, REQUIRED_ENV_VARS)
 
     configure_logging(level=args.log_level or "INFO")
 
-    db_uri = resolve_db_uri(args.db_uri)
-    connection = get_connection(db_uri)
+    db_uri = args.db_uri or env_config.payment_db_uri
+    args.db_uri = db_uri
+
+    connection = get_mongo_client(db_uri)
 
     processor = PaymentProcessor.from_connection(
         connection=connection,
@@ -50,12 +55,13 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     payment_event_id = args.payment_event_id
 
-    if args.mode == "dry-run":
-        processor.run_dry_run(payment_event_id)
-    else:
-        processor.run_final_run(payment_event_id)
-
-    close_connection()
+    try:
+        if args.mode == "dry-run":
+            processor.run_dry_run(payment_event_id)
+        else:
+            processor.run_final_run(payment_event_id)
+    finally:
+        close_mongo_client()
 
     return 0
 
