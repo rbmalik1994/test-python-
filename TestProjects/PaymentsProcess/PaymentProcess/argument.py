@@ -94,6 +94,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional path to a .env file that overrides the default env config.",
     )
+    parser.add_argument(
+        "--env-name",
+        "-e",
+        default=None,
+        help=(
+            "Logical environment name (qa1, dev, prod, etc.). "
+            "Automatically loads data/config/.env.<env>."
+        ),
+    )
 
     return parser
 
@@ -151,6 +160,9 @@ def validate_args(ns: argparse.Namespace, required_env: Iterable[str] | None = N
         env_path = Path(ns.env_file).expanduser()
         if not env_path.is_file():
             raise ValueError(f"--env-file does not point to a readable file: {env_path}")
+
+    if ns.env_name and any(sep in ns.env_name for sep in ("/", "\\")):
+        raise ValueError("--env-name should be a simple token without path separators.")
 
     if ns.db_uri:
         return

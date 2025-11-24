@@ -40,7 +40,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     args = parse_args(list(argv) if argv is not None else None)
 
     env_override = Path(args.env_file).expanduser() if args.env_file else None
-    env_config = get_env_config(env_override)
+    env_config = get_env_config(env_name=args.env_name, env_path=env_override)
 
     validate_args(args, REQUIRED_ENV_VARS)
 
