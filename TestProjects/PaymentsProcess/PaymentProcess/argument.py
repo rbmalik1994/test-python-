@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from pathlib import Path
 from typing import Iterable, Sequence
 
 
@@ -88,6 +89,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run validations without performing calculations.",
     )
+    parser.add_argument(
+        "--env-file",
+        default=None,
+        help="Optional path to a .env file that overrides the default env config.",
+    )
 
     return parser
 
@@ -140,6 +146,11 @@ def validate_args(ns: argparse.Namespace, required_env: Iterable[str] | None = N
 
     if ns.mode not in {"dry-run", "final"}:
         raise ValueError("--mode must be either 'dry-run' or 'final'.")
+
+    if ns.env_file:
+        env_path = Path(ns.env_file).expanduser()
+        if not env_path.is_file():
+            raise ValueError(f"--env-file does not point to a readable file: {env_path}")
 
     if ns.db_uri:
         return

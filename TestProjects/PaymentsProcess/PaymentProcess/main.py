@@ -7,6 +7,7 @@ this file so the CLI remains a thin wrapper that is easy to test and extend.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Iterable
 
 from . import PaymentProcessor
@@ -36,9 +37,11 @@ def main(argv: Iterable[str] | None = None) -> int:
         should convert raised exceptions into appropriate exit codes.
     """
 
-    env_config = get_env_config()
-
     args = parse_args(list(argv) if argv is not None else None)
+
+    env_override = Path(args.env_file).expanduser() if args.env_file else None
+    env_config = get_env_config(env_override)
+
     validate_args(args, REQUIRED_ENV_VARS)
 
     configure_logging(level=args.log_level or "INFO")
