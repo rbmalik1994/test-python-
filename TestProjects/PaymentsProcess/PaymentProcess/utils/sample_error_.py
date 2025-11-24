@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pprint import pprint
 
-from .error_handling import (
+from error_handling import (
     ClaimNotFoundError,
     ConfigurationError,
     ConcurrencyError,
