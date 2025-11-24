@@ -14,6 +14,7 @@ from urllib.parse import quote_plus
 from pymongo import MongoClient
 from pymongo.database import Database
 
+from .error_handling import ConfigurationError
 from .load_env import get_env_config
 
 
@@ -42,9 +43,7 @@ def _bootstrap_defaults_from_env() -> None:
 
     try:
         env_config = get_env_config()
-    except FileNotFoundError:
-        return
-    except RuntimeError:
+    except (FileNotFoundError, ConfigurationError):
         return
 
     configure_default_connection(env_config.payment_db_uri)
@@ -82,7 +81,7 @@ def _resolve_db_uri(explicit_uri: str | None) -> str:
         _bootstrap_defaults_from_env()
 
     if _DEFAULT_DB_URI is None:
-        raise ValueError(
+        raise ConfigurationError(
             "A MongoDB URI must be provided or configured via `configure_default_connection` or .env."
         )
 
@@ -96,7 +95,7 @@ def _resolve_app_name(explicit_app_name: str | None) -> str:
 def _resolve_db_name(explicit_db_name: str | None) -> str:
     resolved = explicit_db_name or _DEFAULT_DB_NAME
     if not resolved:
-        raise ValueError(
+        raise ConfigurationError(
             "A database name must be provided directly or stored via `configure_default_connection`."
         )
     return resolved

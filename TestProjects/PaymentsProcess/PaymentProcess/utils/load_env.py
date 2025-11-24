@@ -7,147 +7,27 @@ minimal yet strict enough to catch misconfigurations early.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
 import os
 
+from .config_models import (
+    AuditMongoConfig,
+    AuditMongoDB,
+    BusinessConfig,
+    DirEnv,
+    EnvConfig,
+    MCPMongoDB,
+    MongoConfig,
+    NHOracleConfig,
+    OracleConfig,
+    PbmFinOracleConfig,
+    PbmProdOracleConfig,
+)
+from .error_handling import ConfigurationError
+
 _ENV_FILENAME = ".env"
 _DEFAULT_ENV_PATH = Path(__file__).resolve().parents[1] / "data" / "config" / _ENV_FILENAME
-
-
-@dataclass(frozen=True, slots=True)
-class DirEnv:
-    """Directory pointers exported from the legacy configuration."""
-
-    arch_dir: str | None
-    data_dir: str | None
-    log_dir: str | None
-    utils_dir: str | None
-    scripts_dir: str | None
-    app_dir: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class MongoConfig:
-    """Primary Mongo cluster configuration."""
-
-    host: str | None
-    auth: str | None
-    replicaset: str | None
-    user: str | None
-    password: str | None
-    timezone: str
-
-
-@dataclass(frozen=True, slots=True)
-class AuditMongoConfig:
-    """Audit Mongo cluster configuration."""
-
-    host: str | None
-    auth: str | None
-    replicaset: str | None
-    user: str | None
-    password: str | None
-    timezone: str
-
-
-@dataclass(frozen=True, slots=True)
-class MCPMongoDB:
-    """Named MCP Mongo databases."""
-
-    fin: str | None
-    mcp: str | None
-    import_db: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class AuditMongoDB:
-    """Named audit Mongo databases."""
-
-    eh: str | None
-    hta: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class OracleConfig:
-    """Generic Oracle connection parameters."""
-
-    user: str | None
-    password: str | None
-    tns: str | None
-    host: str | None
-    port: str | None
-    protocol: str | None
-    service_name: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class PbmFinOracleConfig:
-    """PBM FIN Oracle connection."""
-
-    user: str | None
-    password: str | None
-    tns: str | None
-    host: str | None
-    port: str | None
-    protocol: str | None
-    service_name: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class PbmProdOracleConfig:
-    """PBM PROD Oracle connection."""
-
-    user: str | None
-    password: str | None
-    tns: str | None
-    host: str | None
-    port: str | None
-    protocol: str | None
-    service_name: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class NHOracleConfig:
-    """NH Oracle connection."""
-
-    user: str | None
-    password: str | None
-    tns: str | None
-    host: str | None
-    port: str | None
-    protocol: str | None
-    service_name: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class BusinessConfig:
-    """Business metadata exported from the environment."""
-
-    business_id: int
-    name: str | None
-    code: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class EnvConfig:
-    """Strongly-typed configuration values sourced from ``.env``."""
-
-    env_name: str
-    env_file: Path
-    payment_db_uri: str
-    timezone: str
-    directories: DirEnv
-    mongo_config: MongoConfig
-    audit_mongo_config: AuditMongoConfig
-    mcp_mongo_db: MCPMongoDB
-    audit_mongo_db: AuditMongoDB
-    oracle: OracleConfig
-    pbm_fin_oracle: PbmFinOracleConfig
-    pbm_prod_oracle: PbmProdOracleConfig
-    nh_oracle: NHOracleConfig
-    business: BusinessConfig
 
 
 def _parse_line(line: str) -> tuple[str, str] | None:
@@ -157,14 +37,14 @@ def _parse_line(line: str) -> tuple[str, str] | None:
         return None
 
     if "=" not in stripped:
-        raise ValueError(f"Invalid .env line (missing '='): {line!r}")
+        raise ConfigurationError(f"Invalid .env line (missing '='): {line!r}")
 
     key, value = stripped.split("=", 1)
     key = key.strip()
     value = value.strip().strip('"').strip("'")
 
     if not key:
-        raise ValueError("Environment variable key cannot be empty.")
+        raise ConfigurationError("Environment variable key cannot be empty.")
 
     return key, value
 
@@ -219,7 +99,7 @@ def _get_optional_value(key: str, values: Dict[str, str]) -> str | None:
 def _get_required_value(key: str, values: Dict[str, str]) -> str:
     value = _get_optional_value(key, values)
     if value is None or value == "":
-        raise RuntimeError(f"Required environment variable '{key}' is missing.")
+        raise ConfigurationError(f"Required environment variable '{key}' is missing.")
     return value
 
 
@@ -230,7 +110,7 @@ def _get_int_value(key: str, values: Dict[str, str], default: int = 0) -> int:
     try:
         return int(raw_value)
     except ValueError as exc:
-        raise ValueError(f"Environment variable '{key}' must be an integer.") from exc
+        raise ConfigurationError(f"Environment variable '{key}' must be an integer.") from exc
 
 
 def load_env(
@@ -244,7 +124,7 @@ def load_env(
     path = _determine_env_path(env_name, env_path)
 
     if not path.exists():
-        raise FileNotFoundError(f".env file not found at {path}")
+        raise ConfigurationError(f".env file not found at {path}")
 
     values = _read_env_file(path)
 
