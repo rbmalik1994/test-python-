@@ -82,4 +82,12 @@ class ParentGroup(BaseModel):
     def add_claim(self, claim: Claim) -> None:
         """Assign a claim to the appropriate category inside the group."""
 
-        raise NotImplementedError
+        if claim.frequency_code == FrequencyCode.VOID:
+            self.void_claims.append(claim)
+        elif claim.status == ClaimStatus.ADJUSTED or claim.frequency_code in {
+            FrequencyCode.REPLACEMENT,
+            FrequencyCode.INTERIM_FINAL,
+        }:
+            self.adjust_claims.append(claim)
+        else:
+            self.paid_claims.append(claim)
