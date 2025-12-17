@@ -13,9 +13,7 @@ import fitz
 import pandas as pd
 import pdfplumber
 import pikepdf
-# from pikepdf import Pdf, Settings
 from docx import Document
-# from PyPDF2 import PdfReader, PdfWriter
 from pypdf import PdfReader, PdfWriter
 
 from ..utils.filesystem import timestamped_name
@@ -25,34 +23,53 @@ LOGGER = logging.getLogger(__name__)
 
 def compress_pdf(input_path: Path, output_path: Path, quality: str = "default") -> None:
     """Compress ``input_path`` and write the result to ``output_path``."""
-    # If user explicitly requests no compression, just copy the file.
-    print(f'Quality : {quality}')
     if quality == "none":
         shutil.copy(input_path, output_path)
         return
 
-     
+    # Prefer Ghostscript if available for better compression control
+    gs_executable = shutil.which("gs")
+    if gs_executable:
+        quality_map = {
+            "screen": "/screen",
+            "ebook": "/ebook",
+            "printer": "/printer",
+            "prepress": "/prepress",
+            "default": "/default",
+        }
+        pdf_setting = quality_map.get(quality, "/default")
+        command = [
+            gs_executable,
+            "-sDEVICE=pdfwrite",
+            "-dCompatibilityLevel=1.4",
+            f"-dPDFSETTINGS={pdf_setting}",
+            "-dNOPAUSE",
+            "-dBATCH",
+            "-dQUIET",
+            f"-sOutputFile={output_path}",
+            str(input_path),
+        ]
+        try:
+            subprocess.run(command, check=True, capture_output=True)
+            if output_path.exists():
+                return
+        except subprocess.CalledProcessError as exc:  # pragma: no cover - external dependency
+            LOGGER.warning("Ghostscript compression failed: %s", exc)
 
-    #  rewrite using PyPDF2 (may not reduce size significantly) or copy
-    try: 
-        writer = PdfWriter(clone_from=input_path)
+    # Fallback: use pikepdf to linearize and compress streams
+    try:
+        with pikepdf.open(input_path) as pdf:
+            pdf.save(
+                output_path,
+                linearize=True,
+                compress_streams=True,
+            )
+        if output_path.exists():
+            return
+    except Exception:  # pragma: no cover - relies on pikepdf internals
+        LOGGER.exception("pikepdf compression failed; copying original file")
 
-        # for page in writer.pages:
-        #     page.compress_content_streams()
-
-        for page in writer.pages:
-            for img in page.images:
-                img.replace(img.image, quality=50)
-
-        with open(output_path, "wb") as handle:
-            writer.write(handle)
-
-        print(f"output_path : {output_path}")
-
-    except Exception:
-        print("PyPDF2 compression failed, trying pikepdf")
-        LOGGER.exception("Final fallback failed; copying original file")
-        shutil.copy(input_path, output_path)
+    shutil.copy(input_path, output_path)
 
 
 def merge_pages(

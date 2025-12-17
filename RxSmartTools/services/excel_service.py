@@ -31,7 +31,7 @@ def highlight_differences(
         dataframe_one,
         dataframe_two,
         on=list(merge_keys),
-        suffixes=("_file1", "_file_2"),
+        suffixes=("_file1", "_file2"),
         how="inner",
     )
 
@@ -79,10 +79,16 @@ def _annotate_workbook(
     if worksheet is None:
         return workbook
 
+    # Precompute header positions for merge keys to avoid order sensitivity
+    key_positions = [header_index.get(key) for key in key_list]
+
     for _, row in merged.iterrows():
         key_values = tuple(row[key] for key in key_list)
         for worksheet_row in worksheet.iter_rows(min_row=2, values_only=False):
-            row_key = tuple(cell.value for cell in worksheet_row[: len(key_list)])
+            row_key = tuple(
+                worksheet_row[pos - 1].value if pos is not None and pos - 1 < len(worksheet_row) else None
+                for pos in key_positions
+            )
             if row_key != key_values:
                 continue
             for column_name in compare_list:
@@ -90,7 +96,7 @@ def _annotate_workbook(
                 if header_position is None:
                     continue
                 cell = worksheet_row[header_position - 1]
-                if row[f"{column_name}_file1"] != row[f"{column_name}_file_2"]:
+                if row.get(f"{column_name}_file1") != row.get(f"{column_name}_file2"):
                     cell.fill = HIGHLIGHT_FILL
     return workbook
 

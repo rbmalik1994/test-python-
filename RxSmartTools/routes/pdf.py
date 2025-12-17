@@ -74,7 +74,6 @@ def smart_process():
 
     # Parse JSON payload safely and provide helpful logs on failure
     payload = request.get_json(silent=True)
-    print(payload)
     if payload is None:
         raw = b""
         try:
@@ -101,6 +100,9 @@ def smart_process():
     # as the primary input for single-file operations (rotate/remove/merge/split).
     if not isinstance(filenames, list) or len(filenames) == 0:
         return jsonify({"error": "missing filename(s)"}), 400
+
+    if not actions:
+        return jsonify({"error": "no actions provided"}), 400
 
     # Primary filename for single-input operations
     filename = filenames[0]
