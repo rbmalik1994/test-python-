@@ -25,7 +25,7 @@ from ..utils.filesystem import resolve_upload_path, timestamped_name
 
 LOGGER = logging.getLogger(__name__)
 
-bp = Blueprint("pdf", __name__, url_prefix="/pdf_tool_box")
+bp = Blueprint("pdf", __name__, url_prefix="/pdf")
 
 # Serve the PDF toolbox assets directly from the template folder so the CSS/JS can
 # live alongside the HTML instead of in the global static directory.

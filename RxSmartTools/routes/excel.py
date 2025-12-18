@@ -40,7 +40,7 @@ def excel_tool():
             error_message = "Both files are required."
             return (
                 render_template(
-                    "excel.html",
+                    "tools/excel/excel_toolbox.html",
                     download1=download_one,
                     download2=download_two,
                     error_message=error_message,
@@ -76,7 +76,7 @@ def excel_tool():
             error_message = "Comparison failed. Please verify your files."
 
     return render_template(
-        "excel.html",
+        "tools/excel/excel_toolbox.html",
         download1=download_one,
         download2=download_two,
         error_message=error_message,
