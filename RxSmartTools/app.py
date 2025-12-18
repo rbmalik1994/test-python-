@@ -45,9 +45,6 @@ def _prepare_directories(app: Flask) -> None:
         Path(app.config["UPLOAD_FOLDER"]),
         Path(app.config["SAVED_FOLDER"]),
         Path(app.config["THUMBNAIL_FOLDER"]),
-        Path(app.config["RESULT_FOLDER"]),
-        Path(app.config["SPLIT_FOLDER"]),
-        Path(app.config["MERGE_FOLDER"]),
         Path(app.config["OUTPUT_FOLDER"]),
     ]
     prepare_runtime_directories(directories)

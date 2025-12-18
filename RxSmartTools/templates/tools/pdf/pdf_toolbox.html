@@ -1,0 +1,439 @@
+<!doctype html>
+<!--
+  Template: templates/pages/pdf/pdf_toolbox.html
+  Purpose: Smart PDF Toolbox page — upload PDFs, preview thumbnails, select pages,
+           and perform actions like split, merge, compress, rotate, and export.
+
+  Notes for maintainers:
+  - This file is a Jinja template and uses `url_for` to build route URLs. Keep
+    those constructs intact (e.g. {{ url_for('pdf.smart_upload') }}).
+  - The header/navigation and footer were aligned with `templates/index.html`
+    to provide consistent site navigation and accessibility features.
+  - This refactor replaces Bootstrap with Tailwind utility classes and adds a
+    small mascot + confetti surprise when generation succeeds.
+-->
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Smart PDF Toolbox</title>
+  <!-- Use Tailwind CDN (lightweight quick-edit) to restyle the page. For
+       production consider building Tailwind locally and purging unused styles. -->
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+    <link href="{{ url_for('pdf.serve_pdf_asset', filename='pdf_toolbox.css') }}" rel="stylesheet" />
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-100 text-gray-800">
+  <a class="sr-only focus:not-sr-only p-4 bg-white text-blue-700 rounded-md absolute" href="#main-content">Skip to
+    content</a>
+
+  <!-- Header / Navigation: site branding and top-level links -->
+  <nav role="navigation" aria-label="Main navigation"
+    class="container mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <a href="{{ url_for('main.index') }}" class="flex items-center space-x-3" aria-label="RX Smart Tools home">
+        <div class="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            role="img" aria-hidden="false">
+            <title>RX Smart Tools logo</title>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2" />
+          </svg>
+        </div>
+        <span class="text-xl font-bold">RX Smart Tools</span>
+      </a>
+    </div>
+
+    <div class="hidden md:flex items-center space-x-3 text-sm">
+      <a href="{{ url_for('pdf.smart_index') }}" class="px-2 py-1 rounded-md hover:bg-gray-100">PDF Toolbox</a>
+      <a href="{{ url_for('excel.excel_tool') }}" class="px-2 py-1 rounded-md hover:bg-gray-100">Excel Toolbox</a>
+      <a href="{{ url_for('files.saved_files') }}" class="px-2 py-1 rounded-md hover:bg-gray-100">Saved Files</a>
+    </div>
+  </nav>
+
+  <!-- Main content: PDF toolbox workspace -->
+  <main id="main-content" class="container mx-auto px-4 mt-6">
+    <div class="bg-white/70 backdrop-blur-md rounded-xl p-6 shadow-sm">
+
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-4 w-full">
+          <div
+            class="w-12 h-12 flex items-center justify-center bg-white rounded-lg shadow-sm border border-red-100 flex-shrink-0">
+            <svg viewBox="0 0 64 64" class="w-8 h-8" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img"
+              focusable="false">
+              <rect x="8" y="6" width="48" height="52" rx="6" fill="#ef4444" />
+              <text x="20" y="36" fill="#fff" font-size="10" font-weight="700">PDF</text>
+            </svg>
+          </div>
+
+          <div class="flex-1 min-w-0">
+            <h1 class="text-2xl sm:text-3xl font-extrabold leading-tight">
+              Smart PDF Toolbox
+            </h1>
+            <p class="mt-1 text-gray-600">Upload PDFs, preview thumbnails, select pages, then split/merge/rotate or
+              export.</p>
+          </div>
+
+          <div class="w-1/3 min-w-[220px]">
+            <label for="pdfUpload" class="block text-sm font-medium text-gray-700 sr-only">Upload PDF</label>
+
+            <!-- upload area: simplified, no filename overlay here.
+             Progress/queue shown inside the drop area instead — uploaded filenames
+             remain in the Uploaded Files explorer. -->
+            <div id="uploadDrop"
+              class="relative mt-3 flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl cursor-pointer bg-gradient-to-br from-red-50 to-white hover:from-red-100 text-center w-full h-36 transition"
+              role="button" tabindex="0" aria-label="Upload PDF, click or drag and drop"
+              onclick="document.getElementById('pdfUpload').click()"
+              onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); document.getElementById('pdfUpload').click(); }">
+              <div class="flex flex-col items-center pointer-events-none">
+                <div class="animate-pulse" aria-hidden="false" role="img" aria-label="PDF upload icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12" viewBox="0 0 64 64" focusable="false">
+                    <!-- page body -->
+                    <rect x="8" y="6" width="48" height="52" rx="6" fill="#ef4444" />
+                    <!-- folded corner -->
+                    <polygon points="40,6 56,6 40,18" fill="#fca5a5" />
+                    <!-- subtle white paper inner -->
+                    <rect x="12" y="10" width="36" height="40" rx="3" fill="#fff" opacity="0.06" />
+                    <!-- PDF label -->
+                    <text x="32" y="38" fill="#fff" font-size="10" font-weight="700" text-anchor="middle"
+                      font-family="Arial, Helvetica, sans-serif">PDF</text>
+                  </svg>
+                </div>
+                <div class="mt-2 text-sm text-gray-600">Drop PDF here, or click to browse</div>
+                <div class="mt-1 text-xs text-gray-400">Supported: .pdf • Multiple files allowed</div>
+              </div>
+
+              <!-- Clear file button (top-right of drop area) -->
+              <button id="clearFileBtn" type="button"
+                class="absolute top-2 right-2 text-xs px-2 py-1 bg-white border rounded-md text-gray-600 hover:bg-gray-50"
+                aria-label="Clear uploaded file">
+                Clear
+              </button>
+
+              <!-- Hidden native file input; clicking the entire area opens it. -->
+              <input id="pdfUpload" type="file" accept="application/pdf" class="hidden" multiple />
+
+              <!-- Upload queue / progress (shows file-level progress while uploading).
+           Note: we intentionally do not display the "current uploaded filename" here —
+           uploaded files are visible in the Uploaded Files explorer to the left. -->
+              <div id="uploadQueue" class="absolute left-3 right-3 bottom-3 space-y-2 text-left"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Smart tool area -->
+      <!-- Inline toggle-group toolbox: placed under the Smart PDF Toolbox header and above the pages section.
+        Keeps same hidden checkboxes and IDs so existing JS logic remains unchanged. -->
+  <div id="inlineToolGroupContainer" class="mt-4">
+        <div id="inlineToolGroup" role="toolbar" aria-label="PDF Actions"
+          class="flex items-center gap-2 flex-nowrap whitespace-nowrap">
+          <!-- hidden checkboxes (server logic unchanged) -->
+          <input class="sr-only action-checkbox" type="checkbox" value="compress" id="chk-compress" />
+          <input class="sr-only action-checkbox" type="checkbox" value="merge" id="chk-merge" />
+          <input class="sr-only action-checkbox" type="checkbox" value="split" id="chk-split" />
+          <input class="sr-only action-checkbox" type="checkbox" value="remove" id="chk-remove" />
+          <input class="sr-only action-checkbox" type="checkbox" value="rotate" id="chk-rotate" />
+
+          <!-- Compress: single inline button with hover/focus popover (no extra column) -->
+          <div class="relative" style="display:inline-block;">
+            <button id="compressBtn" type="button"
+              class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+              data-action="compress" aria-pressed="false" title="Compress" aria-haspopup="true" aria-expanded="false">
+              <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                <title>Compress</title>
+                <path d="M3 8h6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                <polyline points="7 5 10 8 7 11" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                <path d="M21 16h-6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                <polyline points="17 19 14 16 17 13" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                <rect x="9.5" y="6.5" width="5" height="3" rx="1" fill="none" stroke="currentColor"
+                  stroke-width="1.5" />
+                <rect x="9.5" y="14.5" width="5" height="3" rx="1" fill="none" stroke="currentColor"
+                  stroke-width="1.5" />
+                <path d="M12 9.5v5" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+              </svg>
+
+              <span class="label">Compress</span>
+
+              <!-- small current-level badge (updated when selected) -->
+              <span id="compressBadge"
+                class="ml-2 text-xs text-gray-500 px-1 py-0.5 rounded bg-gray-100 hidden">Balanced</span>
+
+              <!-- caret -->
+              <svg class="w-3 h-3 ml-2 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                  clip-rule="evenodd" />
+              </svg>
+            </button>
+
+            <!-- Popover: absolute, doesn't affect layout and shows on hover/focus -->
+            <div id="compressPopover"
+              class="hidden absolute left-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg p-2 text-sm z-40"
+              role="menu" aria-label="Compression options">
+              <div class="mb-2 text-xs text-gray-500">Compression level</div>
+              <select id="compressLevelSelect" class="block w-full rounded-md border px-2 py-1 text-sm"
+                aria-label="Compression level">
+                <option value="default">Balanced</option>
+                <option value="fast">Fast (lighter)</option>
+                <option value="best">Best (stronger)</option>
+                <option value="none">None</option>
+              </select>
+
+              <div class="mt-2 flex items-center justify-between">
+                <button id="compressApplyBtn" type="button"
+                  class="w-full mr-2 inline-flex justify-center items-center px-2 py-1 bg-red-600 text-white rounded text-sm">Apply
+                  & Enable</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="relative inline-block">
+            <button id="mergeBtn" type="button"
+              class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+              data-action="merge" aria-pressed="false" title="Merge" aria-haspopup="true" aria-expanded="false">
+              <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                <title>Merge</title>
+                <path d="M3 6h8" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
+                <polyline points="8 4 11 6 8 8" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                  fill="none" />
+                <path d="M21 6h-8" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
+                <polyline points="16 4 13 6 16 8" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                  fill="none" />
+                <path d="M12 6v8" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
+                <polyline points="9.5 15 12 18 14.5 15" stroke-linecap="round" stroke-linejoin="round"
+                  stroke-width="1.8" fill="none" />
+              </svg>
+
+              <span class="label">Merge</span>
+
+              <span id="mergeBadge"
+                class="ml-2 text-xs text-gray-500 px-1 py-0.5 rounded bg-gray-100 hidden">Pages</span>
+
+              <svg class="w-3 h-3 ml-2 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                  clip-rule="evenodd" />
+              </svg>
+            </button>
+
+            <div id="mergePopover"
+              class="hidden absolute left-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg p-3 text-sm z-40"
+              role="menu" aria-label="Merge options">
+              <div class="mb-2 text-xs text-gray-500">Merge mode</div>
+
+              <select id="mergeModePages" class="block w-full rounded-md border px-2 py-1 text-sm"
+                aria-label="Merge Mode">
+                <option value="pages">Pages</option>
+                <option value="files">Files (Merge Multiple Files)</option>
+                <option value="files_pages">Files + Pages</option>
+                <option value="none">None</option>
+              </select>
+
+
+
+              <div class="mt-3">
+                <button id="mergeApplyBtn" type="button"
+                  class="w-full inline-flex justify-center items-center px-2 py-1 bg-red-600 text-white rounded text-sm">Apply
+                  & Enable</button>
+              </div>
+            </div>
+          </div>
+
+          <button type="button"
+            class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+            data-action="split" aria-pressed="false" title="Split">
+            <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14"></path>
+            </svg>
+            Split
+          </button>
+
+          <button type="button"
+            class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+            data-action="remove" aria-pressed="false" title="Remove pages">
+            <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+            Remove
+          </button>
+
+          <div class="flex items-center space-x-2">
+            <button type="button"
+              class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm"
+              data-action="rotate" aria-pressed="false" title="Rotate">
+              <svg class="w-4 h-4 text-red-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v6h6"></path>
+              </svg>
+              Rotate
+            </button>
+
+            <label for="rotateAngle" class="sr-only">Rotate angle</label>
+            <select id="rotateAngle" class="rounded-md border text-sm p-1" aria-label="Rotate angle">
+              <option value="90">90°</option>
+              <option value="180">180°</option>
+              <option value="270">270°</option>
+            </select>
+
+            <button id="rotateSelectedBtn" type="button"
+              class="px-3 py-2 bg-red-100 text-red-700 rounded-md border text-sm">Rotate Selected</button>
+          </div>
+
+          <!-- original inline Generate moved to the right column; keep a hidden placeholder so existing JS that
+               references `generateBtn` continues to work if needed. -->
+          <div class="ml-2">
+            <button id="generateBtnPlaceholder" type="button" style="display:none"
+              class="px-4 py-2 bg-red-600 text-white rounded-md shadow text-sm">Generate</button>
+          </div>
+        </div>
+
+        <div class="mt-2 text-xs text-gray-500">Tip: toggle tools to enable actions, select pages from the left column,
+          then click Generate.</div>
+      </div>
+
+      <div class="mt-6 grid grid-cols-1 md:grid-cols-12 gap-6">
+        <!-- Left column: Pages list and per-page controls -->
+        <section class="md:col-span-3 bg-white rounded-lg p-4 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold">Files</h3>
+            <div class="space-x-2">
+              <button id="selectAllBtnFiles"
+                class="inline-flex items-center px-2 py-1 text-sm bg-red-600 text-white rounded-md">Select All</button>
+              <button id="clearAllBtnFiles"
+                class="inline-flex items-center px-2 py-1 text-sm bg-gray-100 rounded-md text-gray-700">Clear</button>
+            </div>
+          </div>
+          <!-- When multiple files are uploaded the user can switch between them -->
+          <div class="mb-3">
+            <label for="uploadedFilesSelect" class="sr-only">Select uploaded file</label>
+            <!-- Explorer-style uploaded files (VS Code-like) -->
+            <div id="uploadedFilesExplorer" class="border border-gray-200 rounded-md bg-white p-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                  <svg class="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
+                  </svg>
+                  <span class="font-medium text-sm">File List</span>
+                  <span id="uploadedFilesCount" class="ml-2 text-xs text-gray-500">0</span>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                  <button id="explorerToggle" type="button" aria-expanded="true"
+                    class="text-sm text-gray-500 px-2 py-1 rounded hover:bg-gray-100">−</button>
+                </div>
+              </div>
+
+              <div id="uploadedFilesExplorerList" class="mt-2 space-y-1 max-h-40 overflow-auto">
+                <div class="text-xs text-gray-400 italic">No uploaded files yet.</div>
+              </div>
+
+              <div class="mt-2 text-xs text-gray-500">Tip: click "Open" to load a file into the workspace; use the
+                checkbox to mark it for batch operations.</div>
+
+              <!-- Hidden legacy select (kept for compatibility). The visible explorer mirrors this. -->
+              <select id="uploadedFilesSelect" class="hidden" aria-hidden="true">
+                <option value="">-- Select uploaded file --</option>
+              </select>
+            </div>
+          </div>
+           <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold">Pages</h3>
+            <div class="space-x-2">
+              <button id="selectAllBtn"
+                class="inline-flex items-center px-2 py-1 text-sm bg-red-600 text-white rounded-md">Select All</button>
+              <button id="clearAllBtn"
+                class="inline-flex items-center px-2 py-1 text-sm bg-gray-100 rounded-md text-gray-700">Clear</button>
+            </div>
+          </div>
+          <div id="pagesList" class="border border-gray-200 rounded-md p-2 h-64 overflow-auto bg-gray-50"></div>
+        </section>
+
+        <!-- Center column: Upload area and Thumbnails preview -->
+        <section class="md:col-span-6 bg-white rounded-lg p-4 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+
+            <div class="text-sm text-gray-500">Preview Thumbnails</div>
+          </div>
+          <!-- Selected file/pages info banner -->
+          <!-- Preview tabs: show open previews as browser-style tabs. -->
+          <div id="previewTabsWrapper" class="mb-3">
+            <div id="previewTabs" class="flex items-center space-x-1 overflow-auto" role="tablist" aria-label="Open previews">
+              <!-- tabs inserted here -->
+            </div>
+            <div id="selectedInfo" class="mt-2 p-3 border rounded-md bg-gray-50 text-sm text-gray-700">
+              <div><strong>Selected file:</strong> <span id="selectedFilename">None</span></div>
+              <div class="mt-1"><strong>Selected pages:</strong> <span id="selectedPagesInfo">None</span></div>
+            </div>
+          </div>
+
+           
+
+          <div id="pagePreviewSection">
+            <h4 class="text-sm font-medium text-gray-700 mb-2">Page Preview</h4>
+            <!-- tabbed preview contents: each open preview gets its own thumbs container -->
+            <div id="previewContents" class="rounded-md border border-gray-100 p-2 h-80 overflow-auto bg-white">
+              <!-- per-tab thumbs will be added here as children -->
+            </div>
+          </div>
+        </section>
+
+        <!-- Right column: Generated files list and action controls (export, rotate input) -->
+        <section class="md:col-span-3 bg-white rounded-lg p-4 shadow-sm">
+          <h3 class="font-semibold mb-3">Generated / Actions</h3>
+          <div class="mb-3">
+            <button id="generateBtn" type="button" class="w-full inline-flex justify-center items-center px-3 py-2 bg-red-600 text-white rounded-md text-sm mb-2">Generate</button>
+          </div>
+          <ul id="generatedList" class="space-y-2 text-sm"></ul>
+
+          <div id="compressInfo" class="mt-3 text-sm text-gray-600 hidden">
+            <div>Original size: <span id="origSize">-</span></div>
+            <div>Estimated compressed size: <span id="estSize">-</span></div>
+          </div>
+
+          <div class="mt-4 space-y-2">
+            <button id="pdfToWordBtn"
+              class="w-full inline-flex justify-center items-center px-3 py-2 bg-white border rounded-md text-sm">Export
+              Selected → Word</button>
+            <button id="pdfToExcelBtn"
+              class="w-full inline-flex justify-center items-center px-3 py-2 bg-white border rounded-md text-sm">Export
+              Selected → Excel</button>
+          </div>
+
+          <div class="mt-4 text-xs text-gray-500">Rotate by page numbers (e.g. <code>1,3,5-7</code>) or use per-page
+            buttons.</div>
+          <input id="rotatePagesInput" class="mt-2 block w-full text-sm border rounded-md p-2"
+            placeholder="e.g. 1,3,5-7">
+        </section>
+      </div>
+
+
+    </div>
+
+    <footer role="contentinfo" class="mt-6 py-6 text-center text-sm text-gray-600">
+      &copy; RX Smart Tools
+    </footer>
+  </main>
+
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- Scripts: PDF.js (for client-side thumbnails) and application JS logic -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+  <script>
+    window.pdfToolboxConfig = {
+      uploadUrl: "{{ url_for('pdf.smart_upload') }}", 
+      processUrl: "{{ url_for('pdf.smart_process') }}",
+      pdfToWordUrl: "{{ url_for('pdf.pdf_to_word') }}",
+      pdfToExcelUrl: "{{ url_for('pdf.pdf_to_excel') }}",
+      uploadsPreviewBase: "{{ url_for('pdf.serve_upload', filename='') }}",
+      generatedBase: "{{ url_for('pdf.serve_generated', filename='') }}"
+    };
+  </script>
+  <script src="{{ url_for('pdf.serve_pdf_asset', filename='pdf_toolbox.js') }}"></script>
+</body>
+
+</html>

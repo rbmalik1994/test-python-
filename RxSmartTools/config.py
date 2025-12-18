@@ -15,10 +15,7 @@ class BaseConfig:
 
     UPLOAD_FOLDER = DATA_ROOT / "uploads"
     SAVED_FOLDER = DATA_ROOT / "saved"
-    THUMBNAIL_FOLDER = DATA_ROOT / "thumbnails"
-    RESULT_FOLDER = DATA_ROOT / "comparison_results"
-    SPLIT_FOLDER = DATA_ROOT / "split"
-    MERGE_FOLDER = DATA_ROOT / "merge"
+    THUMBNAIL_FOLDER = DATA_ROOT / "thumbnails" 
     OUTPUT_FOLDER = DATA_ROOT / "output"
 
     # Default Excel comparison columns

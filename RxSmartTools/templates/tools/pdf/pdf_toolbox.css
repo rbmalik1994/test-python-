@@ -1,0 +1,60 @@
+/* Helper styles for the Smart PDF Toolbox page */
+body {
+  padding-bottom: 180px;
+}
+
+.thumb-wrapper {
+  display: inline-block;
+  margin: 6px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#pagesList {
+  max-height: 360px;
+  overflow: auto;
+}
+
+#thumbs {
+  max-height: 360px;
+  overflow: auto;
+  white-space: normal;
+}
+
+.angle-display {
+  margin-left: 8px;
+  font-weight: 600;
+  color: #111827;
+}
+
+@keyframes wave {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  25% {
+    transform: translateY(-3px) rotate(-3deg);
+  }
+
+  50% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  75% {
+    transform: translateY(-2px) rotate(2deg);
+  }
+
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+#confetti-canvas {
+  position: fixed;
+  pointer-events: none;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 9999;
+}
