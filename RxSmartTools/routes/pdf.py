@@ -10,6 +10,7 @@ from typing import Any
 
 from flask import (
     Blueprint,
+    abort,
     current_app,
     jsonify,
     render_template,
@@ -24,14 +25,18 @@ from ..utils.filesystem import resolve_upload_path, timestamped_name
 
 LOGGER = logging.getLogger(__name__)
 
-bp = Blueprint("pdf", __name__, url_prefix="/pdf_tool_box")
+bp = Blueprint("pdf", __name__, url_prefix="/pdf")
+
+# Serve the PDF toolbox assets directly from the template folder so the CSS/JS can
+# live alongside the HTML instead of in the global static directory.
+ASSET_DIR = Path(__file__).resolve().parent.parent / "templates" / "tools" / "pdf"
 
 
 @bp.route("/")
 def smart_index():
     """Show the smart PDF toolbox UI."""
 
-    return render_template("pages/pdf_toolbox.html")
+    return render_template("tools/pdf/pdf_toolbox.html")
 
 
 @bp.route("/upload", methods=["POST"])
@@ -74,7 +79,6 @@ def smart_process():
 
     # Parse JSON payload safely and provide helpful logs on failure
     payload = request.get_json(silent=True)
-    print(payload)
     if payload is None:
         raw = b""
         try:
@@ -102,6 +106,9 @@ def smart_process():
     if not isinstance(filenames, list) or len(filenames) == 0:
         return jsonify({"error": "missing filename(s)"}), 400
 
+    if not actions:
+        return jsonify({"error": "no actions provided"}), 400
+
     # Primary filename for single-input operations
     filename = filenames[0]
 
@@ -125,14 +132,18 @@ def smart_process():
         try:
             pdf_service.rotate_pages(working_path, rotations, rotated_path)
             working_path = rotated_path
+            generated.extend(pdf_service.copy_outputs_to_saved([rotated_path], saved_dir))
         except Exception as exc:  # pragma: no cover - service level logging handles
             LOGGER.exception("Rotation failed: %s", exc)
 
     if "remove" in actions and pages:
+        print(f" pages : {pages}")
         removed_path = output_dir / timestamped_name("removed", ".pdf")
+        print(f" removed_path : {removed_path}")
         try:
             pdf_service.remove_pages(working_path, pages, removed_path)
             working_path = removed_path
+            generated.extend(pdf_service.copy_outputs_to_saved([removed_path], saved_dir))
         except Exception as exc:
             LOGGER.exception("Remove pages failed: %s", exc)
 
@@ -218,6 +229,7 @@ def smart_process():
             try:
                 pdf_service.merge_pages(working_path, pages, merged_path)
                 working_path = merged_path
+                generated.extend(pdf_service.copy_outputs_to_saved([merged_path], saved_dir))
                 progress.append(f"Merged selected pages from primary file -> {merged_path.name}")
             except Exception as exc:
                 LOGGER.exception("Merge pages failed: %s", exc)
@@ -258,15 +270,15 @@ def smart_process():
         except Exception as exc:
             LOGGER.exception("Compress failed: %s", exc)
 
-    try:
-        final_name = timestamped_name("result", ".pdf")
-        final_path = saved_dir / final_name
-        if working_path != final_path:
-            shutil.copy(working_path, final_path)
-        generated.append(final_name)
-    except Exception as exc:
-        LOGGER.exception("Final save failed: %s", exc)
-
+    # try:
+    #     final_name = timestamped_name("result", ".pdf")
+    #     final_path = saved_dir / final_name
+    #     if working_path != final_path:
+    #         shutil.copy(working_path, final_path)
+    #     generated.append(final_name)
+    # except Exception as exc:
+    #     LOGGER.exception("Final save failed: %s", exc) 
+    
     return jsonify({"generated": generated})
 
 
@@ -322,6 +334,20 @@ def pdf_to_excel():
     except Exception as exc:
         LOGGER.exception("PDF to Excel conversion failed: %s", exc)
         return jsonify({"error": "conversion failed"}), 500
+
+
+@bp.route("/assets/<path:filename>")
+def serve_pdf_asset(filename: str):
+    """Serve CSS/JS assets that live next to the toolbox template.
+
+    The files stay in ``templates/tools/pdf`` but are exposed here so the
+    browser receives the correct MIME type instead of a 404 HTML page.
+    """
+
+    safe_path = (ASSET_DIR / filename).resolve()
+    if ASSET_DIR not in safe_path.parents and safe_path != ASSET_DIR:
+        abort(404)
+    return send_from_directory(ASSET_DIR, filename)
 
 
 @bp.route("/uploads/<path:filename>")

@@ -1,0 +1,320 @@
+<!doctype html>
+<!--
+    Template: templates/excel.html
+    Purpose: Smart Excel toolbox UI (Excel-like theme) aligned with the PDF toolbox
+    Notes: keeps legacy IDs/names (file1/file2, merge-columns, compare-columns, excelForm)
+                 so existing backend routes keep working.
+-->
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Excel Toolbox</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+    <link href="{{ url_for('excel.serve_excel_asset', filename='excel_toolbox.css') }}" rel="stylesheet" />
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-100 text-gray-800">
+    <a class="sr-only focus:not-sr-only p-4 bg-white text-blue-700 rounded-md absolute" href="#main-content">Skip to content</a>
+
+    <nav role="navigation" aria-label="Main navigation" class="container mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="{{ url_for('main.index') }}" class="flex items-center space-x-3" aria-label="RX Smart Tools home">
+                <div class="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" role="img" aria-hidden="false">
+                        <title>RX Smart Tools logo</title>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2" />
+                    </svg>
+                </div>
+                <span class="text-xl font-bold">RX Smart Tools</span>
+            </a>
+        </div>
+
+        <div class="hidden md:flex items-center space-x-3 text-sm">
+            <a href="{{ url_for('pdf.smart_index') }}" class="px-2 py-1 rounded-md hover:bg-gray-100">PDF Toolbox</a>
+            <a href="{{ url_for('excel.excel_tool') }}" class="px-2 py-1 rounded-md hover:bg-gray-100 font-semibold text-green-700">Excel Toolbox</a>
+            <a href="{{ url_for('files.saved_files') }}" class="px-2 py-1 rounded-md hover:bg-gray-100">Saved Files</a>
+        </div>
+    </nav>
+
+    <main id="main-content" class="container mx-auto px-4 mt-6">
+        <form id="excelForm" method="POST" enctype="multipart/form-data" action="{{ url_for('excel.excel_tool') }}">
+            <div class="bg-white/70 backdrop-blur-md rounded-xl p-6 shadow-sm">
+
+                {% if error_message %}
+                <div id="error" class="mb-4 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{{ error_message }}</div>
+                {% else %}
+                <div id="error" class="hidden mb-4 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700"></div>
+                {% endif %}
+
+                <div id="loading" class="hidden mb-4 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">Loading common columns...</div>
+
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4 w-full">
+                        <div class="w-12 h-12 flex items-center justify-center bg-white rounded-lg shadow-sm border border-green-100 flex-shrink-0">
+                            <svg viewBox="0 0 64 64" class="w-8 h-8" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" focusable="false">
+                                <rect x="8" y="6" width="48" height="52" rx="6" fill="#16a34a" />
+                                <text x="20" y="36" fill="#fff" font-size="10" font-weight="700">xlsx</text>
+                            </svg>
+                        </div>
+
+                        <div class="flex-1 min-w-0">
+                            <h1 class="text-2xl sm:text-3xl font-extrabold leading-tight">Smart Excel Toolbox</h1>
+                            <p class="mt-1 text-gray-600">Upload spreadsheets, preview sheets, pick merge keys, compare columns, and export aligned results.</p>
+                            <div class="mt-2 flex flex-wrap items-center text-xs text-gray-500 gap-2">
+                                <span class="inline-flex items-center px-2 py-1 rounded-full bg-green-100 text-green-700">Live preview</span>
+                                <span class="inline-flex items-center px-2 py-1 rounded-full bg-green-50 text-green-700">Local & server compare</span>
+                                <span class="inline-flex items-center px-2 py-1 rounded-full bg-gray-100 text-gray-700">CSV · XLS · XLSX</span>
+                            </div>
+                        </div>
+
+                        <div class="w-1/3 min-w-[240px]">
+                            <label for="excelUpload" class="block text-sm font-medium text-gray-700 sr-only">Upload spreadsheets</label>
+                            <div id="uploadDrop" class="upload-drop relative border-2 border-dashed border-green-200 bg-white rounded-lg p-4 text-center hover:border-green-400 focus-within:border-green-500">
+                                <input id="excelUpload" class="sr-only" type="file" accept=".xlsx,.xls,.csv" multiple>
+                                <p class="text-sm text-gray-600">Drag & drop spreadsheets here</p>
+                                <p class="text-xs text-gray-400">or</p>
+                                <button id="browseBtn" type="button" class="mt-2 px-3 py-2 bg-green-600 text-white rounded-md text-sm shadow-sm">Browse files</button>
+                                <p class="mt-2 text-xs text-gray-500">Up to 10 files; first two are used for comparison.</p>
+                                <div id="uploadQueue" class="mt-3 space-y-2 text-left text-xs"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="inlineToolGroupContainer" class="mt-4">
+                    <div id="inlineToolGroup" role="toolbar" aria-label="Excel actions" class="flex items-center gap-2 flex-nowrap whitespace-nowrap overflow-auto">
+                        <input class="sr-only action-checkbox" type="checkbox" value="compare" id="chk-compare" />
+                        <input class="sr-only action-checkbox" type="checkbox" value="merge" id="chk-merge" />
+                        <input class="sr-only action-checkbox" type="checkbox" value="export" id="chk-export" />
+                        <input class="sr-only action-checkbox" type="checkbox" value="highlight" id="chk-highlight" />
+
+                        <div class="relative inline-block">
+                            <button id="compareBtn" type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm" data-action="compare" aria-pressed="false" title="Compare" aria-haspopup="true" aria-expanded="false">
+                                <svg class="w-4 h-4 text-green-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                                    <title>Compare</title>
+                                    <path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                                    <path d="M9 8l-4 4 4 4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                                </svg>
+                                <span class="label">Compare</span>
+                                <span id="compareBadge" class="ml-2 inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">Columns</span>
+                                <svg class="w-3 h-3 ml-2 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                            <div id="comparePopover" class="hidden absolute left-0 mt-2 w-52 bg-white border border-gray-200 rounded-md shadow-lg p-3 text-sm z-40" role="menu" aria-label="Compare options">
+                                <div class="mb-2 text-xs text-gray-500">Compare mode</div>
+                                <select id="compareModeSelect" class="block w-full rounded-md border px-2 py-1 text-sm">
+                                    <option value="columns">Columns</option>
+                                    <option value="values">Values only</option>
+                                    <option value="summary">Summary</option>
+                                </select>
+                                <div class="mt-3 flex items-center justify-between">
+                                    <label class="flex items-center space-x-2 text-xs text-gray-600">
+                                        <input id="compareStrict" type="checkbox" class="rounded border-gray-300">
+                                        <span>Strict match</span>
+                                    </label>
+                                    <button id="compareApplyBtn" type="button" class="px-3 py-1 bg-green-600 text-white rounded-md text-xs">Apply</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="relative inline-block">
+                            <button id="mergeBtn" type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm" data-action="merge" aria-pressed="false" title="Merge" aria-haspopup="true" aria-expanded="false">
+                                <svg class="w-4 h-4 text-green-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                    <title>Merge</title>
+                                    <path d="M7 7h5v5H7zM12 12h5v5h-5z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                                    <path d="M12 7v2.5M12 14.5V17" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                                </svg>
+                                <span class="label">Merge</span>
+                                <span id="mergeBadge" class="ml-2 inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">Inner</span>
+                                <svg class="w-3 h-3 ml-2 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                            <div id="mergePopover" class="hidden absolute left-0 mt-2 w-52 bg-white border border-gray-200 rounded-md shadow-lg p-3 text-sm z-40" role="menu" aria-label="Merge options">
+                                <div class="mb-2 text-xs text-gray-500">Join type</div>
+                                <select id="mergeModeSelect" class="block w-full rounded-md border px-2 py-1 text-sm">
+                                    <option value="inner">Inner join</option>
+                                    <option value="left">Left join</option>
+                                    <option value="right">Right join</option>
+                                    <option value="outer">Full outer</option>
+                                </select>
+                                <div class="mt-3 flex items-center justify-between">
+                                    <label class="flex items-center space-x-2 text-xs text-gray-600">
+                                        <input id="mergeKeepUnmatched" type="checkbox" class="rounded border-gray-300">
+                                        <span>Keep unmatched</span>
+                                    </label>
+                                    <button id="mergeApplyBtn" type="button" class="px-3 py-1 bg-green-600 text-white rounded-md text-xs">Apply</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="relative inline-block">
+                            <button id="exportBtn" type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm" data-action="export" aria-pressed="false" title="Export" aria-haspopup="true" aria-expanded="false">
+                                <svg class="w-4 h-4 text-green-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                    <title>Export</title>
+                                    <path d="M12 5v10" stroke-linecap="round" stroke-width="2" />
+                                    <path d="M8 9l4-4 4 4" stroke-linecap="round" stroke-width="2" />
+                                    <rect x="5" y="13" width="14" height="6" rx="2" stroke-width="2" />
+                                </svg>
+                                <span class="label">Export</span>
+                                <span id="exportBadge" class="ml-2 inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">XLSX</span>
+                                <svg class="w-3 h-3 ml-2 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                            <div id="exportPopover" class="hidden absolute left-0 mt-2 w-52 bg-white border border-gray-200 rounded-md shadow-lg p-3 text-sm z-40" role="menu" aria-label="Export options">
+                                <div class="mb-2 text-xs text-gray-500">Export format</div>
+                                <select id="exportFormatSelect" class="block w-full rounded-md border px-2 py-1 text-sm">
+                                    <option value="xlsx">XLSX</option>
+                                    <option value="csv">CSV</option>
+                                    <option value="json">JSON</option>
+                                </select>
+                                <div class="mt-3 flex items-center justify-between">
+                                    <label class="flex items-center space-x-2 text-xs text-gray-600">
+                                        <input id="exportWithHeaders" type="checkbox" class="rounded border-gray-300" checked>
+                                        <span>Include headers</span>
+                                    </label>
+                                    <button id="exportApplyBtn" type="button" class="px-3 py-1 bg-green-600 text-white rounded-md text-xs">Apply</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="button" class="tool-btn inline-flex items-center px-3 py-2 bg-white border rounded-md text-sm shadow-sm" data-action="highlight" aria-pressed="false" title="Highlight differences">
+                            <svg class="w-4 h-4 text-green-600 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                            </svg>
+                            Highlight
+                        </button>
+
+                        <div class="ml-2">
+                            <button id="generateBtnPlaceholder" type="button" style="display:none" class="px-4 py-2 bg-green-600 text-white rounded-md shadow text-sm">Generate</button>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-xs text-gray-500">Tip: toggle tools to enable actions, select sheets/columns, then click Generate.</div>
+                </div>
+
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-12 gap-6">
+                    <section class="md:col-span-3 bg-white rounded-lg p-4 shadow-sm">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-semibold">Files</h3>
+                            <div class="space-x-2">
+                                <button id="clearFileBtn" type="button" class="text-xs px-2 py-1 border rounded-md text-gray-700">Clear</button>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div id="uploadedFilesExplorer" class="border border-gray-200 rounded-md bg-gray-50 p-2">
+                                <div class="flex items-center justify-between text-xs text-gray-600">
+                                    <span><span id="uploadedFilesCount">0</span> files</span>
+                                    <div class="space-x-1">
+                                        <button id="selectAllBtnFiles" type="button" class="text-green-700 hover:underline">All</button>
+                                        <button id="clearAllBtnFiles" type="button" class="text-gray-600 hover:underline">None</button>
+                                        <button id="explorerToggle" type="button" class="text-gray-500 hover:underline" aria-expanded="true">Collapse</button>
+                                    </div>
+                                </div>
+                                <div id="uploadedFilesExplorerList" class="mt-2 space-y-2"></div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="text-sm font-medium">Sheets</h4>
+                                <span id="sheetCount" class="text-xs text-gray-500">0</span>
+                            </div>
+                            <div id="sheetsList" class="border border-gray-200 rounded-md p-2 h-32 overflow-auto bg-white"></div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="text-sm font-medium">Columns</h4>
+                                <span id="columnCount" class="text-xs text-gray-500">0</span>
+                            </div>
+                            <div id="columnsList" class="border border-gray-200 rounded-md p-2 h-32 overflow-auto bg-white"></div>
+                        </div>
+                    </section>
+
+                    <section class="md:col-span-6 bg-white rounded-lg p-4 shadow-sm">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="text-sm text-gray-600">Sheet preview</div>
+                            <div class="space-x-2">
+                                <button id="selectAllBtn" type="button" class="text-xs px-2 py-1 border rounded-md text-gray-700">Select all rows</button>
+                                <button id="clearAllBtn" type="button" class="text-xs px-2 py-1 border rounded-md text-gray-700">Clear</button>
+                            </div>
+                        </div>
+
+                        <div id="selectedInfo" class="mb-3 p-3 border rounded-md bg-gray-50 text-sm text-gray-700 flex flex-wrap gap-3">
+                            <span>File: <strong id="selectedFilename">None</strong></span>
+                            <span>Sheet: <strong id="selectedSheet">None</strong></span>
+                            <span>Columns: <strong id="selectedColumns">0</strong></span>
+                            <span>Rows previewed: <strong id="selectedRows">0</strong></span>
+                        </div>
+
+                        <div id="previewTable" class="rounded-md border border-gray-100 p-2 h-80 overflow-auto bg-white text-sm"></div>
+
+                        <div id="columns-section" class="mt-4 hidden">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="section-title text-sm font-semibold text-gray-700 mb-2">Select Merge Columns</div>
+                                    <div class="checkbox-group flex flex-wrap gap-2" id="merge-columns"></div>
+                                </div>
+                                <div>
+                                    <div class="section-title text-sm font-semibold text-gray-700 mb-2">Select Compare Columns</div>
+                                    <div class="checkbox-group flex flex-wrap gap-2" id="compare-columns"></div>
+                                </div>
+                            </div>
+                            <div class="mt-3 text-xs text-gray-500">Automatic suggestions come from your first two files. Adjust as needed.</div>
+                        </div>
+                    </section>
+
+                    <section class="md:col-span-3 bg-white rounded-lg p-4 shadow-sm">
+                        <h3 class="font-semibold mb-3">Actions & Results</h3>
+                        <div class="space-y-2">
+                            <button id="generateBtn" type="button" class="w-full inline-flex justify-center items-center px-3 py-2 bg-green-600 text-white rounded-md text-sm shadow-sm">Generate</button>
+                            <div id="statusMessage" class="text-xs text-gray-600"></div>
+                        </div>
+
+                        <div id="resultDownloads" class="mt-4 space-y-2 text-sm">
+                            {% if download1 and download2 %}
+                            <div class="rounded-md border border-green-100 bg-green-50 p-3">
+                                <div class="font-semibold text-green-800 mb-2">Download results</div>
+                                <a class="block text-green-700 hover:underline" href="{{ url_for('excel.download_result', filename=download1) }}">📥 File 1 comparison</a>
+                                <a class="block text-green-700 hover:underline" href="{{ url_for('excel.download_result', filename=download2) }}">📥 File 2 comparison</a>
+                            </div>
+                            {% endif %}
+                            <ul id="generatedList" class="space-y-1"></ul>
+                        </div>
+
+                        <div class="mt-4 text-xs text-gray-500">Need both files to compare. Use the merge keys above to align rows before comparing.</div>
+                        <input id="rotatePagesInput" class="hidden" aria-hidden="true" />
+                        <input id="rotateAngle" class="hidden" aria-hidden="true" />
+                    </section>
+                </div>
+
+                <div class="hidden">
+                    <input type="file" name="file1" id="file1" accept=".xlsx,.xls,.csv">
+                    <input type="file" name="file2" id="file2" accept=".xlsx,.xls,.csv">
+                </div>
+            </div>
+        </form>
+
+        <footer role="contentinfo" class="mt-6 py-6 text-center text-sm text-gray-600">&copy; RX Smart Tools</footer>
+    </main>
+
+    <canvas id="confetti-canvas"></canvas>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script>
+        window.excelToolboxConfig = {
+            columnsUrl: "{{ url_for('excel.get_common_columns') }}",
+            compareUrl: "{{ url_for('excel.excel_tool') }}",
+            downloadBase: "{{ url_for('excel.download_result', filename='') }}"
+        };
+        window.excelServerContext = {{ {'download1': download1|default(None), 'download2': download2|default(None)} | tojson }};
+    </script>
+    <script src="{{ url_for('excel.serve_excel_asset', filename='excel_toolbox.js') }}"></script>
+</body>
+
+</html>

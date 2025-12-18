@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 from flask import Flask
@@ -25,13 +24,11 @@ except ImportError:
     from RxSmartTools.routes import register_blueprints
     from RxSmartTools.services.file_service import prepare_runtime_directories
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
 
 def create_app() -> Flask:
     """Create and configure the Flask application."""
-
-    logging.basicConfig(level=logging.INFO)
     app = Flask(__name__, template_folder="templates")
     app.config.from_object(Config)
 
@@ -48,9 +45,6 @@ def _prepare_directories(app: Flask) -> None:
         Path(app.config["UPLOAD_FOLDER"]),
         Path(app.config["SAVED_FOLDER"]),
         Path(app.config["THUMBNAIL_FOLDER"]),
-        Path(app.config["RESULT_FOLDER"]),
-        Path(app.config["SPLIT_FOLDER"]),
-        Path(app.config["MERGE_FOLDER"]),
         Path(app.config["OUTPUT_FOLDER"]),
     ]
     prepare_runtime_directories(directories)

@@ -1,0 +1,126 @@
+/* Helper styles for the Smart Excel Toolbox page (green theme) */
+body {
+  padding-bottom: 180px;
+}
+
+.upload-drop {
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.upload-drop.dragging {
+  border-color: #10b981;
+  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.16);
+  transform: translateY(-2px);
+}
+
+.tool-btn[aria-pressed="true"] {
+  background: linear-gradient(90deg, #ecfdf3, #d1fae5);
+  border-color: #34d399;
+  color: #065f46;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: #ecfdf3;
+  color: #065f46;
+  border: 1px solid #bbf7d0;
+}
+
+.checkbox-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  font-size: 13px;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.checkbox-chip input {
+  accent-color: #059669;
+}
+
+.table-preview {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table-preview th,
+.table-preview td {
+  border: 1px solid #e5e7eb;
+  padding: 6px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table-preview thead {
+  background: #ecfdf3;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.table-preview tbody tr:nth-child(odd) {
+  background: #f9fafb;
+}
+
+.table-preview tbody tr:hover {
+  background: #f0fdf4;
+}
+
+#uploadQueue .progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #ecfdf3;
+  overflow: hidden;
+}
+
+#uploadQueue .progress-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #34d399, #10b981);
+  width: 0;
+  transition: width 200ms ease;
+}
+
+
+@keyframes wave {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  25% {
+    transform: translateY(-3px) rotate(-3deg);
+  }
+
+  50% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  75% {
+    transform: translateY(-2px) rotate(2deg);
+  }
+
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+
+#confetti-canvas {
+  position: fixed;
+  pointer-events: none;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 9999;
+}

@@ -5,7 +5,15 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, render_template, request, send_file
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    render_template,
+    request,
+    send_file,
+    send_from_directory,
+)
 
 from ..services import excel_service
 from ..utils.filesystem import timestamped_name
@@ -13,6 +21,7 @@ from ..utils.filesystem import timestamped_name
 LOGGER = logging.getLogger(__name__)
 
 bp = Blueprint("excel", __name__, url_prefix="/excel")
+ASSET_DIR = Path(__file__).resolve().parent.parent / "templates" / "tools" / "excel"
 
 
 @bp.route("/", methods=["GET", "POST"])
@@ -31,7 +40,7 @@ def excel_tool():
             error_message = "Both files are required."
             return (
                 render_template(
-                    "excel.html",
+                    "tools/excel/excel_toolbox.html",
                     download1=download_one,
                     download2=download_two,
                     error_message=error_message,
@@ -67,7 +76,7 @@ def excel_tool():
             error_message = "Comparison failed. Please verify your files."
 
     return render_template(
-        "excel.html",
+        "tools/excel/excel_toolbox.html",
         download1=download_one,
         download2=download_two,
         error_message=error_message,
@@ -110,3 +119,10 @@ def download_result(filename: str):
 
     result_root = Path(current_app.config["RESULT_FOLDER"])
     return send_file(result_root / filename, as_attachment=True)
+
+
+@bp.route("/assets/<path:filename>")
+def serve_excel_asset(filename: str):
+    """Serve Excel toolbox static assets (CSS/JS) from the template tools directory."""
+
+    return send_from_directory(ASSET_DIR, filename)

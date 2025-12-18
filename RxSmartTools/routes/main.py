@@ -18,10 +18,7 @@ def _runtime_directories() -> list[Path]:
     return [
         Path(current_app.config["UPLOAD_FOLDER"]),
         Path(current_app.config["SAVED_FOLDER"]),
-        Path(current_app.config["THUMBNAIL_FOLDER"]),
-        Path(current_app.config["RESULT_FOLDER"]),
-        Path(current_app.config["SPLIT_FOLDER"]),
-        Path(current_app.config["MERGE_FOLDER"]),
+        Path(current_app.config["THUMBNAIL_FOLDER"]), 
         Path(current_app.config["OUTPUT_FOLDER"]),
     ]
 
