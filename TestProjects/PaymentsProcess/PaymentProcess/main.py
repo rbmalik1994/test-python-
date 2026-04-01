@@ -12,6 +12,7 @@ from typing import Iterable
 
 from . import PaymentProcessor
 from .argument import parse_args, validate_args
+from .data.models.event import RunMode
 from .utils.load_env import get_env_config
 from .utils.mongo_db import close_mongo_client, get_mongo_client
 from .utils.logging import configure_logging
@@ -19,6 +20,40 @@ from .utils.logging import configure_logging
 
 REQUIRED_ENV_VARS: tuple[str, ...] = ("PAYMENT_DB_URI",)
 """Environment variables that satisfy defaults for CLI options."""
+
+
+def _run_payment_center_validation(processor: PaymentProcessor, payment_event_id: str) -> None:
+    """Execute Payment Center validation stage."""
+
+    payment_event = processor.load_config(payment_event_id)
+    payment_event.run_mode = RunMode.DRY_RUN
+    processor.validate_initial(payment_event, RunMode.DRY_RUN)
+    processor.process_payment_centers(payment_event, ensure_create=False)
+
+
+def _run_payment_center_creation(processor: PaymentProcessor, payment_event_id: str) -> None:
+    """Execute Payment Center creation stage."""
+
+    payment_event = processor.load_config(payment_event_id)
+    payment_event.run_mode = RunMode.FINAL
+    processor.validate_initial(payment_event, RunMode.FINAL)
+    processor.process_payment_centers(payment_event, ensure_create=True)
+
+
+def _run_payment_event_rollback(processor: PaymentProcessor, payment_event_id: str) -> None:
+    """Execute Payment Event rollback when supported by the processor."""
+
+    rollback_handler = getattr(processor, "run_payment_event_rollback", None)
+    if rollback_handler is None:
+        rollback_handler = getattr(processor, "run_rollback", None)
+
+    if callable(rollback_handler):
+        rollback_handler(payment_event_id)
+        return
+
+    raise NotImplementedError(
+        "Payment Event rollback is not implemented in PaymentProcessor yet."
+    )
 
 
 def main(argv: Iterable[str] | None = None) -> int:
@@ -61,8 +96,16 @@ def main(argv: Iterable[str] | None = None) -> int:
     try:
         if args.mode == "dry-run":
             processor.run_dry_run(payment_event_id)
-        else:
+        elif args.mode == "final":
             processor.run_final_run(payment_event_id)
+        elif args.mode == "rollback":
+            _run_payment_event_rollback(processor, payment_event_id)
+        elif args.mode == "pc-validation":
+            _run_payment_center_validation(processor, payment_event_id)
+        elif args.mode == "pc-create":
+            _run_payment_center_creation(processor, payment_event_id)
+        else:
+            raise ValueError(f"Unsupported mode: {args.mode}")
     finally:
         close_mongo_client()
 

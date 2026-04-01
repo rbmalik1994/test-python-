@@ -14,6 +14,11 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 
+PAYMENT_CENTER_MODES: tuple[str, ...] = ("pc-validation", "pc-create")
+PAYMENT_EVENT_MODES: tuple[str, ...] = ("dry-run", "final", "rollback")
+SUPPORTED_RUN_MODES: tuple[str, ...] = PAYMENT_CENTER_MODES + PAYMENT_EVENT_MODES
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Create and configure the argument parser used by the CLI.
 
@@ -28,8 +33,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="payment-process",
         description=(
-            "Execute PaymentEvent processing steps in either Dry Run or Final "
-            "Run mode."
+            "Execute categorized payment runs: Payment Center "
+            "(Validation/Create) and Payment Event (Dry Run/Final/Rollback)."
         ),
     )
 
@@ -42,9 +47,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mode",
         "-m",
-        choices=("dry-run", "final"),
+        choices=SUPPORTED_RUN_MODES,
         required=True,
-        help="Select Dry Run for estimates or Final for production processing.",
+        help=(
+            "Run category mode: pc-validation | pc-create | dry-run | final | "
+            "rollback."
+        ),
     )
     parser.add_argument(
         "--workers",
@@ -64,31 +72,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Set logging level (INFO, DEBUG, etc.). Defaults to env setting.",
     )
     parser.add_argument(
-        "--config-path",
-        default=None,
-        help="Optional external configuration file to load during startup.",
-    )
-    parser.add_argument(
         "--db-uri",
         default=None,
         help="Datastore connection string. Falls back to PAYMENT_DB_URI env.",
     )
-    parser.add_argument(
-        "--resume",
-        action="store_true",
-        help="Attempt to resume a previously interrupted run when safe.",
-    )
-    parser.add_argument(
-        "--pc-type",
-        choices=("provider", "dmr"),
-        default=None,
-        help="Override PaymentCenter type when supported by downstream logic.",
-    )
-    parser.add_argument(
-        "--validate-only",
-        action="store_true",
-        help="Run validations without performing calculations.",
-    )
+
     parser.add_argument(
         "--env-file",
         default=None,
@@ -153,8 +141,10 @@ def validate_args(ns: argparse.Namespace, required_env: Iterable[str] | None = N
     if ns.batch_size is not None and ns.batch_size <= 0:
         raise ValueError("--batch-size must be a positive integer when provided.")
 
-    if ns.mode not in {"dry-run", "final"}:
-        raise ValueError("--mode must be either 'dry-run' or 'final'.")
+    if ns.mode not in set(SUPPORTED_RUN_MODES):
+        raise ValueError(
+            "--mode must be one of: " + ", ".join(SUPPORTED_RUN_MODES)
+        )
 
     if ns.env_file:
         env_path = Path(ns.env_file).expanduser()
@@ -164,7 +154,7 @@ def validate_args(ns: argparse.Namespace, required_env: Iterable[str] | None = N
     if ns.env_name and any(sep in ns.env_name for sep in ("/", "\\")):
         raise ValueError("--env-name should be a simple token without path separators.")
 
-    if ns.db_uri:
+    if getattr(ns, "db_uri", None):
         return
 
     missing_env: list[str] = []
